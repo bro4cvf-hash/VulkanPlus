@@ -1,0 +1,119 @@
+plugins {
+    id 'fabric-loom' version '1.17.21'
+    id 'maven-publish'
+}
+
+version = project.mod_version
+group = project.maven_group
+base {
+    archivesName = project.archives_base_name
+}
+
+repositories {
+    mavenCentral()
+    maven {
+        name = "Fabric"
+        url = "https://maven.fabricmc.net/"
+    }
+    maven {
+        name = "TerraformersMC"
+        url = "https://maven.terraformersmc.com/releases/"
+    }
+    exclusiveContent {
+        forRepository {
+            maven {
+                name = "Modrinth"
+                url = "https://api.modrinth.com/maven"
+            }
+        }
+        filter {
+            includeGroup "maven.modrinth"
+        }
+    }
+}
+
+dependencies {
+    // Minecraft and Mappings
+    minecraft "com.mojang:minecraft:${project.minecraft_version}"
+    mappings "net.fabricmc:yarn:${project.yarn_mappings}:v2"
+
+    // Fabric Loader
+    modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
+
+    // Fabric API
+    modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
+
+    // Mod Menu (Optional GUI integration)
+    modCompileOnly "com.terraformersmc:modmenu:${project.modmenu_version}"
+    modLocalRuntime "com.terraformersmc:modmenu:${project.modmenu_version}"
+
+    // VulkanMod (Companion dependency - compileOnly ensures standalone safety)
+    modCompileOnly "maven.modrinth:vulkanmod:${project.vulkanmod_version}"
+
+    // LWJGL 3 Vulkan Bindings (bundled via Jar-in-Jar)
+    implementation "org.lwjgl:lwjgl-vulkan:${project.lwjgl_version}"
+    include "org.lwjgl:lwjgl-vulkan:${project.lwjgl_version}"
+
+    // Unit Testing
+    testImplementation "org.junit.jupiter:junit-jupiter:5.10.2"
+    testRuntimeOnly "org.junit.platform:junit-platform-launcher"
+}
+
+processResources {
+    inputs.property "version", project.version
+    filesMatching("fabric.mod.json") {
+        expand "version": project.version
+    }
+    doLast {
+        copy {
+            from destinationDir
+            into layout.buildDirectory.dir("classes/java/main")
+        }
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    it.options.release = 21
+    it.options.encoding = "UTF-8"
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+    withSourcesJar()
+}
+
+tasks.withType(AbstractArchiveTask).configureEach {
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+}
+
+jar {
+    from("LICENSE") {
+        rename { "${it}_${project.base.archivesName.get()}" }
+    }
+}
+
+remapJar {
+    archiveBaseName.set("vulkan-plus")
+    archiveVersion.set("1.0.0")
+    archiveClassifier.set("")
+}
+
+test {
+    useJUnitPlatform()
+}
+
+loom {
+    runs {
+        client {
+            runDir = "run"
+            ideConfigGenerated = true
+            vmArg "-Dmixin.debug.export=true"
+        }
+        server {
+            runDir = "run/server"
+            ideConfigGenerated = true
+        }
+    }
+}

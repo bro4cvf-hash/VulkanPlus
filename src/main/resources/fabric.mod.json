@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "id": "vulkanplus",
+  "version": "${version}",
+  "name": "Vulkan Plus",
+  "description": "High-performance companion optimization mod for VulkanMod.",
+  "authors": [
+    "bro4cvf-hash"
+  ],
+  "contact": {
+    "homepage": "https://github.com/bro4cvf-hash/vulkanplus",
+    "sources": "https://github.com/bro4cvf-hash/vulkanplus",
+    "issues": "https://github.com/bro4cvf-hash/vulkanplus/issues"
+  },
+  "license": "MIT",
+  "icon": "assets/vulkanplus/icon.png",
+  "environment": "*",
+  "entrypoints": {
+    "main": [
+      "net.vulkanplus.VulkanPlusMod"
+    ],
+    "client": [
+      "net.vulkanplus.VulkanPlusMod"
+    ],
+    "modmenu": [
+      "net.vulkanplus.ui.ModMenuIntegration"
+    ]
+  },
+  "mixins": [
+    "vulkanplus.mixins.json",
+    {
+      "config": "vulkanplus-vulkanmod.mixins.json",
+      "environment": "client"
+    },
+    {
+      "config": "vulkanplus-modmenu.mixins.json",
+      "environment": "client"
+    }
+  ],
+  "depends": {
+    "fabricloader": ">=0.16.0",
+    "minecraft": "1.21.11",
+    "java": ">=21"
+  },
+  "recommends": {
+    "vulkanmod": "*"
+  },
+  "suggests": {
+    "modmenu": "*"
+  }
+}

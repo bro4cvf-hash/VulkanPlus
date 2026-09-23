@@ -1,0 +1,53 @@
+package net.vulkanplus.bridge;
+
+import net.fabricmc.loader.api.FabricLoader;
+import org.objectweb.asm.tree.ClassNode;
+import org.spongepowered.asm.mixin.extensibility.IMixinConfigPlugin;
+import org.spongepowered.asm.mixin.extensibility.IMixinInfo;
+
+import java.util.List;
+import java.util.Set;
+
+/**
+ * Ensures mixins targeting Mod Menu classes are strictly loaded
+ * only when the 'modmenu' mod is actually present at runtime.
+ */
+public class ModMenuMixinPlugin implements IMixinConfigPlugin {
+    private boolean isModMenuPresent;
+
+    @Override
+    public void onLoad(String mixinPackage) {
+        try {
+            this.isModMenuPresent = FabricLoader.getInstance().isModLoaded("modmenu");
+        } catch (Throwable t) {
+            this.isModMenuPresent = false;
+        }
+    }
+
+    @Override
+    public String getRefMapperConfig() {
+        return null;
+    }
+
+    @Override
+    public boolean shouldApplyMixin(String targetClassName, String mixinClassName) {
+        return isModMenuPresent;
+    }
+
+    @Override
+    public void acceptTargets(Set<String> myTargets, Set<String> otherTargets) {
+    }
+
+    @Override
+    public List<String> getMixins() {
+        return null;
+    }
+
+    @Override
+    public void preApply(String targetClassName, ClassNode targetClass, String mixinClassName, IMixinInfo mixinInfo) {
+    }
+
+    @Override
+    public void postApply(String targetClassName, ClassNode targetClass, String mixinClassName, IMixinInfo mixinInfo) {
+    }
+}

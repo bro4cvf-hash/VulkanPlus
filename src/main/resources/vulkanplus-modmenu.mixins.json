@@ -1,0 +1,14 @@
+{
+  "required": false,
+  "minVersion": "0.8",
+  "package": "net.vulkanplus.mixin.modmenu",
+  "compatibilityLevel": "JAVA_21",
+  "plugin": "net.vulkanplus.bridge.ModMenuMixinPlugin",
+  "mixins": [],
+  "client": [
+    "FabricIconHandlerMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

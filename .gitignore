@@ -1,0 +1,38 @@
+# Gradle
+.gradle/
+build/
+!gradle/wrapper/gradle-wrapper.jar
+
+# IDE & Editor
+.idea/
+*.iml
+*.ipr
+*.iws
+.project
+.classpath
+.settings/
+.vscode/
+
+# Minecraft Runtime & Loom
+run/
+.fabric/
+crash-reports/
+config/
+
+# Agent & Local Indexing Cache
+.agents/
+.codegraph/
+
+# Documentation & Non-code assets
+docs/
+
+# Logs & Temp Files
+logs/
+*.log
+*.log.gz
+*.tmp
+
+# Operating System Files
+.DS_Store
+Thumbs.db
+ehthumbs.db

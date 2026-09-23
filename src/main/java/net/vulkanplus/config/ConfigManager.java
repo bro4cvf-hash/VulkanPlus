@@ -1,0 +1,237 @@
+package net.vulkanplus.config;
+
+import net.fabricmc.loader.api.FabricLoader;
+import net.vulkanplus.VulkanPlusMod;
+
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
+import java.util.HashMap;
+import java.util.Map;
+
+/**
+ * Thread-safe configuration manager with atomic file persistence.
+ */
+public class ConfigManager {
+    private static final Object LOCK = new Object();
+    private static volatile boolean initialized = false;
+    private static volatile VulkanPlusConfig currentConfig = new VulkanPlusConfig();
+
+    static {
+        load();
+    }
+
+    public static Path getConfigPath() {
+        try {
+            return FabricLoader.getInstance().getConfigDir().resolve("vulkanplus.json");
+        } catch (Throwable t) {
+            return Paths.get("config", "vulkanplus.json");
+        }
+    }
+
+    public static Path getTempPath() {
+        try {
+            return FabricLoader.getInstance().getConfigDir().resolve("vulkanplus.json.tmp");
+        } catch (Throwable t) {
+            return Paths.get("config", "vulkanplus.json.tmp");
+        }
+    }
+
+    public static VulkanPlusConfig getConfig() {
+        if (!initialized) {
+            load();
+        }
+        return currentConfig;
+    }
+
+    public static void setConfig(VulkanPlusConfig newConfig) {
+        synchronized (LOCK) {
+            currentConfig = newConfig.copy();
+            save();
+        }
+    }
+
+    /**
+     * Loads configuration from disk, creating defaults if not present.
+     */
+    public static void load() {
+        synchronized (LOCK) {
+            Path configPath = getConfigPath();
+            if (!Files.exists(configPath)) {
+                VulkanPlusMod.LOGGER.info("[VulkanPlus] Config file not found. Generating defaults at {}", configPath);
+                initialized = true;
+                save();
+                return;
+            }
+
+            try (BufferedReader reader = Files.newBufferedReader(configPath)) {
+                StringBuilder sb = new StringBuilder();
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    sb.append(line);
+                }
+                parseJson(sb.toString(), currentConfig);
+                initialized = true;
+                VulkanPlusMod.LOGGER.info("[VulkanPlus] Successfully loaded configuration from disk.");
+            } catch (Exception e) {
+                VulkanPlusMod.LOGGER.error("[VulkanPlus] Failed to load config from {}. Falling back to default settings.", configPath, e);
+                currentConfig = new VulkanPlusConfig();
+                initialized = true;
+            }
+        }
+    }
+
+    /**
+     * Atomically saves active configuration to disk.
+     */
+    public static void save() {
+        synchronized (LOCK) {
+            try {
+                Path configPath = getConfigPath();
+                Path tempPath = getTempPath();
+                if (configPath.getParent() != null && !Files.exists(configPath.getParent())) {
+                    Files.createDirectories(configPath.getParent());
+                }
+
+                String json = toJson(currentConfig);
+                try (BufferedWriter writer = Files.newBufferedWriter(tempPath)) {
+                    writer.write(json);
+                    writer.flush();
+                }
+
+                Files.move(tempPath, configPath, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+            } catch (IOException e) {
+                VulkanPlusMod.LOGGER.error("[VulkanPlus] Failed to save configuration atomically.", e);
+            }
+        }
+    }
+
+    /**
+     * Lightweight custom JSON serializer to avoid third-party dependencies.
+     */
+    public static String toJson(VulkanPlusConfig config) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("{\n");
+        sb.append("  \"enabled\": ").append(config.enabled).append(",\n");
+        sb.append("  \"enableBufferPooling\": ").append(config.enableBufferPooling).append(",\n");
+        sb.append("  \"enableDescriptorCaching\": ").append(config.enableDescriptorCaching).append(",\n");
+        sb.append("  \"enablePsoCache\": ").append(config.enablePsoCache).append(",\n");
+        sb.append("  \"enableReverseZ\": ").append(config.enableReverseZ).append(",\n");
+        sb.append("  \"enableSwapchainTuning\": ").append(config.enableSwapchainTuning).append(",\n");
+        sb.append("  \"presentMode\": \"").append(config.presentMode).append("\",\n");
+        sb.append("  \"enableFastMath\": ").append(config.enableFastMath).append(",\n");
+        sb.append("  \"enableFastRandom\": ").append(config.enableFastRandom).append(",\n");
+        sb.append("  \"enableMoreCulling\": ").append(config.enableMoreCulling).append(",\n");
+        sb.append("  \"enableEntityCulling\": ").append(config.enableEntityCulling).append(",\n");
+        sb.append("  \"enableBlockEntityCulling\": ").append(config.enableBlockEntityCulling).append(",\n");
+        sb.append("  \"enableBlockEntityOcclusion\": ").append(config.enableBlockEntityOcclusion).append(",\n");
+        sb.append("  \"enableSmartLeaves\": ").append(config.enableSmartLeaves).append(",\n");
+        sb.append("  \"enableBeaconBeamCulling\": ").append(config.enableBeaconBeamCulling).append(",\n");
+        sb.append("  \"enableExtraGlassCulling\": ").append(config.enableExtraGlassCulling).append(",\n");
+        sb.append("  \"enableParticleCulling\": ").append(config.enableParticleCulling).append(",\n");
+        sb.append("  \"enableMatrixPooling\": ").append(config.enableMatrixPooling).append(",\n");
+        sb.append("  \"opaqueLeaves\": ").append(config.opaqueLeaves).append(",\n");
+        sb.append("  \"enableThreadPriority\": ").append(config.enableThreadPriority).append(",\n");
+        sb.append("  \"renderThreadPriority\": ").append(config.renderThreadPriority).append(",\n");
+        sb.append("  \"workerThreadPriority\": ").append(config.workerThreadPriority).append(",\n");
+        sb.append("  \"ioThreadPriority\": ").append(config.ioThreadPriority).append(",\n");
+        sb.append("  \"enableFastItemFrames\": ").append(config.enableFastItemFrames).append(",\n");
+        sb.append("  \"enableItemFrameBlockOcclusion\": ").append(config.enableItemFrameBlockOcclusion).append(",\n");
+        sb.append("  \"itemFrameMaxDistance\": ").append(config.itemFrameMaxDistance).append(",\n");
+        sb.append("  \"itemFrameItemDistance\": ").append(config.itemFrameItemDistance).append(",\n");
+        sb.append("  \"cullingDistanceFactor\": ").append(config.cullingDistanceFactor).append(",\n");
+        sb.append("  \"particleCullingDistance\": ").append(config.particleCullingDistance).append(",\n");
+        sb.append("  \"beaconProtection\": ").append(config.beaconProtection).append(",\n");
+        sb.append("  \"chestProtection\": ").append(config.chestProtection).append(",\n");
+        sb.append("  \"showDiagnosticsHud\": ").append(config.showDiagnosticsHud).append(",\n");
+        sb.append("  \"showFps\": ").append(config.showFps).append(",\n");
+        sb.append("  \"activePreset\": \"").append(config.activePreset.name()).append("\"\n");
+        sb.append("}\n");
+        return sb.toString();
+    }
+
+    /**
+     * Simple robust key-value parser for configuration JSON.
+     */
+    public static void parseJson(String json, VulkanPlusConfig target) {
+        Map<String, String> map = new HashMap<>();
+        String trimmed = json.trim();
+        if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
+            trimmed = trimmed.substring(1, trimmed.length() - 1);
+            String[] pairs = trimmed.split(",");
+            for (String pair : pairs) {
+                String[] kv = pair.split(":", 2);
+                if (kv.length == 2) {
+                    String key = kv[0].trim().replace("\"", "");
+                    String val = kv[1].trim().replace("\"", "");
+                    map.put(key, val);
+                }
+            }
+        }
+
+        if (map.containsKey("enabled")) target.enabled = Boolean.parseBoolean(map.get("enabled"));
+        if (map.containsKey("enableBufferPooling")) target.enableBufferPooling = Boolean.parseBoolean(map.get("enableBufferPooling"));
+        if (map.containsKey("enableDescriptorCaching")) target.enableDescriptorCaching = Boolean.parseBoolean(map.get("enableDescriptorCaching"));
+        if (map.containsKey("enablePsoCache")) target.enablePsoCache = Boolean.parseBoolean(map.get("enablePsoCache"));
+        if (map.containsKey("enableReverseZ")) target.enableReverseZ = Boolean.parseBoolean(map.get("enableReverseZ"));
+        if (map.containsKey("enableSwapchainTuning")) target.enableSwapchainTuning = Boolean.parseBoolean(map.get("enableSwapchainTuning"));
+        if (map.containsKey("presentMode")) target.presentMode = map.get("presentMode");
+        if (map.containsKey("enableFastMath")) target.enableFastMath = Boolean.parseBoolean(map.get("enableFastMath"));
+        if (map.containsKey("enableFastRandom")) target.enableFastRandom = Boolean.parseBoolean(map.get("enableFastRandom"));
+
+        if (map.containsKey("enableMoreCulling")) {
+            target.enableMoreCulling = Boolean.parseBoolean(map.get("enableMoreCulling"));
+            target.enableEntityCulling = target.enableMoreCulling;
+        } else if (map.containsKey("enableEntityCulling")) {
+            target.enableMoreCulling = Boolean.parseBoolean(map.get("enableEntityCulling"));
+            target.enableEntityCulling = target.enableMoreCulling;
+        }
+
+        if (map.containsKey("enableBlockEntityCulling")) target.enableBlockEntityCulling = Boolean.parseBoolean(map.get("enableBlockEntityCulling"));
+        if (map.containsKey("enableBlockEntityOcclusion")) target.enableBlockEntityOcclusion = Boolean.parseBoolean(map.get("enableBlockEntityOcclusion"));
+        if (map.containsKey("enableSmartLeaves")) target.enableSmartLeaves = Boolean.parseBoolean(map.get("enableSmartLeaves"));
+        if (map.containsKey("enableBeaconBeamCulling")) target.enableBeaconBeamCulling = Boolean.parseBoolean(map.get("enableBeaconBeamCulling"));
+        if (map.containsKey("enableExtraGlassCulling")) target.enableExtraGlassCulling = Boolean.parseBoolean(map.get("enableExtraGlassCulling"));
+        if (map.containsKey("enableParticleCulling")) target.enableParticleCulling = Boolean.parseBoolean(map.get("enableParticleCulling"));
+        if (map.containsKey("enableMatrixPooling")) target.enableMatrixPooling = Boolean.parseBoolean(map.get("enableMatrixPooling"));
+        if (map.containsKey("opaqueLeaves")) target.opaqueLeaves = Boolean.parseBoolean(map.get("opaqueLeaves"));
+
+        if (map.containsKey("enableThreadPriority")) target.enableThreadPriority = Boolean.parseBoolean(map.get("enableThreadPriority"));
+        if (map.containsKey("renderThreadPriority")) {
+            try { target.renderThreadPriority = Integer.parseInt(map.get("renderThreadPriority")); } catch (NumberFormatException ignored) {}
+        }
+        if (map.containsKey("workerThreadPriority")) {
+            try { target.workerThreadPriority = Integer.parseInt(map.get("workerThreadPriority")); } catch (NumberFormatException ignored) {}
+        }
+        if (map.containsKey("ioThreadPriority")) {
+            try { target.ioThreadPriority = Integer.parseInt(map.get("ioThreadPriority")); } catch (NumberFormatException ignored) {}
+        }
+
+        if (map.containsKey("enableFastItemFrames")) target.enableFastItemFrames = Boolean.parseBoolean(map.get("enableFastItemFrames"));
+        if (map.containsKey("enableItemFrameBlockOcclusion")) target.enableItemFrameBlockOcclusion = Boolean.parseBoolean(map.get("enableItemFrameBlockOcclusion"));
+        if (map.containsKey("itemFrameMaxDistance")) {
+            try { target.itemFrameMaxDistance = Double.parseDouble(map.get("itemFrameMaxDistance")); } catch (NumberFormatException ignored) {}
+        }
+        if (map.containsKey("itemFrameItemDistance")) {
+            try { target.itemFrameItemDistance = Double.parseDouble(map.get("itemFrameItemDistance")); } catch (NumberFormatException ignored) {}
+        }
+
+        if (map.containsKey("cullingDistanceFactor")) {
+            try { target.cullingDistanceFactor = Double.parseDouble(map.get("cullingDistanceFactor")); } catch (NumberFormatException ignored) {}
+        }
+        if (map.containsKey("particleCullingDistance")) {
+            try { target.particleCullingDistance = Double.parseDouble(map.get("particleCullingDistance")); } catch (NumberFormatException ignored) {}
+        }
+        if (map.containsKey("beaconProtection")) target.beaconProtection = Boolean.parseBoolean(map.get("beaconProtection"));
+        if (map.containsKey("chestProtection")) target.chestProtection = Boolean.parseBoolean(map.get("chestProtection"));
+        if (map.containsKey("showDiagnosticsHud")) target.showDiagnosticsHud = Boolean.parseBoolean(map.get("showDiagnosticsHud"));
+        if (map.containsKey("showFps")) target.showFps = Boolean.parseBoolean(map.get("showFps"));
+        if (map.containsKey("activePreset")) {
+            try { target.activePreset = Preset.valueOf(map.get("activePreset")); } catch (Exception ignored) {}
+        }
+    }
+}

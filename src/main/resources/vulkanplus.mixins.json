@@ -1,0 +1,27 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "net.vulkanplus.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": [
+    "math.MathHelperMixin",
+    "thread.UtilMixin"
+  ],
+  "client": [
+    "culling.EntityRenderManagerMixin",
+    "culling.BlockEntityRenderManagerMixin",
+    "culling.BeaconBlockEntityRendererMixin",
+    "culling.ItemFrameEntityRendererMixin",
+    "culling.LeavesBlockMixin",
+    "culling.PaneBlockMixin",
+    "culling.TranslucentBlockMixin",
+    "culling.BeaconBlockMixin",
+    "culling.ParticleManagerMixin",
+    "render.GameRendererMixin",
+    "render.SpriteContentsMixin",
+    "render.BlockRenderLayersMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}
