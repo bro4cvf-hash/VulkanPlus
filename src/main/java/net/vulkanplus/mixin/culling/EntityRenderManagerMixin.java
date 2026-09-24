@@ -32,9 +32,19 @@ public class EntityRenderManagerMixin {
 
         // Expand bounding box with safety margin (0.5 blocks, matching vanilla) to prevent animation / limb clipping
         // Direct primitive coordinates passed to avoid 'new Box' heap allocation
-        if (!RenderOptimizer.getFrustumCuller().isAabbVisible(
+        net.vulkanplus.render.FrustumCuller frustumCuller = RenderOptimizer.getFrustumCuller();
+        if (!frustumCuller.isAabbVisible(
                 box.minX - 0.5, box.minY - 0.5, box.minZ - 0.5,
                 box.maxX + 0.5, box.maxY + 0.5, box.maxZ + 0.5)) {
+            cir.setReturnValue(false);
+            return;
+        }
+
+        if (!net.vulkanplus.culling.VulkanSectionVisibility.isAabbVisible(
+                box.minX, box.minY, box.minZ,
+                box.maxX, box.maxY, box.maxZ,
+                frustumCuller.getCameraX(), frustumCuller.getCameraY(), frustumCuller.getCameraZ())) {
+            frustumCuller.recordOccludedEntity();
             cir.setReturnValue(false);
         }
     }

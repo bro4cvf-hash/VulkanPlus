@@ -60,12 +60,22 @@ public class ReverseZProjection {
     }
 
     /**
+     * Converts a standard Minecraft projection matrix into a Reverse-Z projection matrix without heap allocation.
+     */
+    public static Matrix4f convertToReverseZ(Matrix4f proj, float zNear, float zFar, Matrix4f dest) {
+        if (dest == null) dest = new Matrix4f();
+        if (dest != proj) {
+            dest.set(proj);
+        }
+        dest.m22(zNear / (zFar - zNear));
+        dest.m32((zFar * zNear) / (zFar - zNear));
+        return dest;
+    }
+
+    /**
      * Converts a standard Minecraft projection matrix into a Reverse-Z projection matrix.
      */
     public static Matrix4f convertToReverseZ(Matrix4f proj, float zNear, float zFar) {
-        Matrix4f result = new Matrix4f(proj);
-        result.m22(zNear / (zFar - zNear));
-        result.m32((zFar * zNear) / (zFar - zNear));
-        return result;
+        return convertToReverseZ(proj, zNear, zFar, new Matrix4f());
     }
 }

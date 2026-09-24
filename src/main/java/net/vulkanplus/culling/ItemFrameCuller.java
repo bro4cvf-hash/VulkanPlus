@@ -9,6 +9,8 @@ import net.vulkanplus.config.ConfigManager;
 import net.vulkanplus.config.VulkanPlusConfig;
 
 public final class ItemFrameCuller {
+    private static final ThreadLocal<BlockPos.Mutable> MUTABLE_POS = ThreadLocal.withInitial(BlockPos.Mutable::new);
+
     // Epsilon tolerance to protect grazing angles and 3D item geometry
     public static final double BACKFACE_EPSILON = -0.02;
 
@@ -76,7 +78,11 @@ public final class ItemFrameCuller {
                     return true;
                 }
 
-                BlockPos frontPos = framePos.offset(facing);
+                BlockPos.Mutable frontPos = MUTABLE_POS.get().set(
+                        framePos.getX() + nx,
+                        framePos.getY() + ny,
+                        framePos.getZ() + nz
+                );
                 BlockState stateInFront = world.getBlockState(frontPos);
                 if (stateInFront.isOpaqueFullCube()) {
                     culledOccludedFrames++;

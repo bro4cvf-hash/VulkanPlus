@@ -131,4 +131,44 @@ public class ConfigManagerTest {
         assertFalse(config.matchesPreset(Preset.EXTREME));
         assertNull(config.getEffectivePreset());
     }
+
+    @Test
+    @DisplayName("ASS PC options roundtrip and persist correctly")
+    public void testAssPcPersistence() {
+        VulkanPlusConfig cfg = new VulkanPlusConfig();
+        cfg.noMobAnimations = true;
+        cfg.noDroppedItemAnimation = true;
+        cfg.staticExpAnimations = true;
+        cfg.noParticles = true;
+        cfg.noTextureAnimations = true;
+        cfg.noEntityShadows = true;
+        cfg.noItemGlint = true;
+        cfg.noSky = true;
+        cfg.noFog = true;
+        cfg.noBlockEntityAnimations = true;
+        cfg.noChunkFade = true;
+        cfg.fastChest = true;
+        cfg.enableC2MeOptimizations = true;
+        cfg.enableMemoryLeakFix = true;
+
+        String json = ConfigManager.toJson(cfg);
+        VulkanPlusConfig parsed = new VulkanPlusConfig();
+        ConfigManager.parseJson(json, parsed);
+
+        assertTrue(parsed.noMobAnimations);
+        assertTrue(parsed.noDroppedItemAnimation);
+        assertTrue(parsed.staticExpAnimations);
+        assertTrue(parsed.noParticles);
+        assertTrue(parsed.noTextureAnimations);
+        assertTrue(parsed.noEntityShadows);
+        assertTrue(parsed.noItemGlint);
+        assertTrue(parsed.noSky);
+        assertTrue(parsed.noFog);
+        assertTrue(parsed.noBlockEntityAnimations);
+        assertTrue(parsed.noChunkFade);
+        assertTrue(parsed.fastChest);
+        assertTrue(parsed.enableC2MeOptimizations);
+        assertTrue(parsed.enableMemoryLeakFix);
+        assertTrue(parsed.isAssPcActive());
+    }
 }

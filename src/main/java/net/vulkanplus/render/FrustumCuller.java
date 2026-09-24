@@ -141,6 +141,22 @@ public class FrustumCuller {
         return true;
     }
 
+    public void recordOccludedEntity() {
+        culledEntitiesCount++;
+    }
+
+    public double getCameraX() {
+        return cameraX;
+    }
+
+    public double getCameraY() {
+        return cameraY;
+    }
+
+    public double getCameraZ() {
+        return cameraZ;
+    }
+
     public void resetStats() {
         culledEntitiesCount = 0;
         totalEntitiesTested = 0;

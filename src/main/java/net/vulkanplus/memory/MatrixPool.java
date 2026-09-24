@@ -20,6 +20,17 @@ public class MatrixPool {
     private final Deque<Vector3f> vector3fPool = new ArrayDeque<>();
     private final Deque<Quaternionf> quatPool = new ArrayDeque<>();
 
+    public MatrixPool() {
+        for (int i = 0; i < 4; i++) {
+            matrix4fPool.offerFirst(new Matrix4f());
+        }
+        for (int i = 0; i < 2; i++) {
+            matrix3fPool.offerFirst(new Matrix3f());
+            vector3fPool.offerFirst(new Vector3f());
+            quatPool.offerFirst(new Quaternionf());
+        }
+    }
+
     public static MatrixPool get() {
         return POOL.get();
     }

@@ -81,4 +81,32 @@ public class VulkanSubsystemsTest {
         int fallback = SwapchainTuning.selectOptimalPresentMode(SwapchainTuning.VK_PRESENT_MODE_MAILBOX_KHR, fifoOnly);
         assertEquals(SwapchainTuning.VK_PRESENT_MODE_FIFO_KHR, fallback);
     }
+
+    @Test
+    @DisplayName("RenderOptimizer actively wires MatrixPool, ReverseZProjection, and FastXoroshiro128PlusPlus")
+    public void testRenderOptimizerSubsystemWiring() {
+        net.vulkanplus.config.VulkanPlusConfig cfg = net.vulkanplus.config.ConfigManager.getConfig();
+        cfg.enabled = true;
+        cfg.enableMatrixPooling = true;
+        cfg.enableReverseZ = true;
+        cfg.enableFastRandom = true;
+
+        Matrix4f proj = new Matrix4f().perspective((float) Math.toRadians(70.0), 16.0f / 9.0f, 0.05f, 4096.0f);
+        org.joml.Quaternionf camRot = new org.joml.Quaternionf().rotationXYZ(0.15f, -0.45f, 0.0f);
+
+        net.vulkanplus.render.RenderOptimizer.updateCameraMatrices(proj, camRot, 10.0, 64.0, -20.0);
+
+        Matrix4f revZProj = net.vulkanplus.render.RenderOptimizer.getCachedReverseZProjection();
+        assertNotNull(revZProj);
+        Vector4f nearClip = new Vector4f(0, 0, -0.05f, 1.0f).mul(revZProj);
+        assertEquals(1.0f, nearClip.z / nearClip.w, 1e-4f, "Wired ReverseZProjection must map zNear (0.05f) to 1.0");
+
+        float jitter = net.vulkanplus.render.RenderOptimizer.nextParticleJitter();
+        assertTrue(Math.abs(jitter) <= 5.0e-5f, "FastXoroshiro128PlusPlus particle jitter must be bounded in [-5e-5, +5e-5]");
+
+        VulkanStateCache staticCache = net.vulkanplus.bridge.impl.VulkanModBridgeImpl.getStateCache();
+        staticCache.reset();
+        assertTrue(staticCache.checkAndBindPipeline(999L));
+        assertFalse(staticCache.checkAndBindPipeline(999L));
+    }
 }

@@ -58,6 +58,7 @@ public class VulkanPlusMod implements ModInitializer, ClientModInitializer {
 
                 try {
                     ThreadPriorityManager.applyRenderThreadPriority();
+                    ThreadPriorityManager.sweepAndApplyAll();
                 } catch (Throwable t) {
                     LOGGER.debug("[{}] Thread priority initialization skipped: {}", MOD_NAME, t.getMessage());
                 }

@@ -59,6 +59,49 @@ public class ParticleCuller {
             return false;
         }
 
+        if (!net.vulkanplus.culling.VulkanSectionVisibility.isPositionVisible(
+                (int) Math.floor(x), (int) Math.floor(y), (int) Math.floor(z),
+                cameraX, cameraY, cameraZ)) {
+            culledParticleCount++;
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * Fast path for particles already verified to be inside the camera frustum by Vanilla's
+     * BillboardParticleRenderer (frustum.intersectPoint(x, y, z)).
+     * Performs distance culling (scaled by cullingDistanceFactor) and O(1) VulkanMod SectionGrid occlusion culling
+     * without repeating the 6-plane frustum test.
+     */
+    public boolean shouldRenderInFrustumParticle(double x, double y, double z) {
+        VulkanPlusConfig config = ConfigManager.getConfig();
+        if (!config.enableParticleCulling) return true;
+
+        totalParticleCount++;
+
+        double baseMaxDistSq = this.cachedMaxDistSq > 0 ? this.cachedMaxDistSq : (config.particleCullingDistance * config.particleCullingDistance);
+        double factor = config.cullingDistanceFactor > 0.0 ? config.cullingDistanceFactor : 1.0;
+        double maxDistSq = baseMaxDistSq * (factor * factor);
+
+        double dx = x - cameraX;
+        double dy = y - cameraY;
+        double dz = z - cameraZ;
+        double distSq = dx * dx + dy * dy + dz * dz;
+
+        if (distSq > maxDistSq) {
+            culledParticleCount++;
+            return false;
+        }
+
+        if (!net.vulkanplus.culling.VulkanSectionVisibility.isPositionVisible(
+                (int) Math.floor(x), (int) Math.floor(y), (int) Math.floor(z),
+                cameraX, cameraY, cameraZ)) {
+            culledParticleCount++;
+            return false;
+        }
+
         return true;
     }
 
@@ -91,6 +134,14 @@ public class ParticleCuller {
             }
 
             if (frustumCuller != null && !frustumCuller.isSphereVisible(xs[i], ys[i], zs[i], radius)) {
+                culledParticleCount++;
+                outVisible[i] = false;
+                continue;
+            }
+
+            if (!net.vulkanplus.culling.VulkanSectionVisibility.isPositionVisible(
+                    (int) Math.floor(xs[i]), (int) Math.floor(ys[i]), (int) Math.floor(zs[i]),
+                    cameraX, cameraY, cameraZ)) {
                 culledParticleCount++;
                 outVisible[i] = false;
                 continue;

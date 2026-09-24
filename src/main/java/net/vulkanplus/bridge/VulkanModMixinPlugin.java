@@ -13,6 +13,20 @@ import java.util.Set;
  * only when the 'vulkanmod' mod is actually present at runtime.
  */
 public class VulkanModMixinPlugin implements IMixinConfigPlugin {
+    private static final Set<String> VULKANMOD_MIXINS = Set.of(
+            "net.vulkanplus.mixin.vulkan.OptionsMixin",
+            "net.vulkanplus.mixin.vulkan.VkRenderPassMixin",
+            "net.vulkanplus.mixin.vulkan.TaskDispatcherMixin",
+            "net.vulkanplus.mixin.vulkan.AreaBufferMixin",
+            "net.vulkanplus.mixin.vulkan.SwapChainMixin",
+            "net.vulkanplus.mixin.vulkan.PipelineMixin",
+            "net.vulkanplus.mixin.vulkan.MemoryTypesMixin",
+            "net.vulkanplus.mixin.vulkan.RendererMixin",
+            "net.vulkanplus.mixin.vulkan.WorldRendererMixin",
+            "net.vulkanplus.mixin.vulkan.VRenderSystemMixin",
+            "net.vulkanplus.mixin.culling.VulkanBlockRendererMixin"
+    );
+
     private boolean isVulkanModPresent;
 
     @Override
@@ -31,7 +45,12 @@ public class VulkanModMixinPlugin implements IMixinConfigPlugin {
 
     @Override
     public boolean shouldApplyMixin(String targetClassName, String mixinClassName) {
-        return isVulkanModPresent;
+        if (VULKANMOD_MIXINS.contains(mixinClassName)
+                || mixinClassName.contains(".mixin.vulkan.")
+                || targetClassName.startsWith("net.vulkanmod.")) {
+            return isVulkanModPresent;
+        }
+        return true;
     }
 
     @Override

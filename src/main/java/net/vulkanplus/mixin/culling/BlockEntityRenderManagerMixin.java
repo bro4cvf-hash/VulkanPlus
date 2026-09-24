@@ -33,6 +33,10 @@ public class BlockEntityRenderManagerMixin {
 
         // Never cull beacons or portal gateways whose beams extend far into the sky
         BlockEntityType<?> type = blockEntity.getType();
+        if (config.fastChest && (type == BlockEntityType.CHEST || type == BlockEntityType.ENDER_CHEST || type == BlockEntityType.TRAPPED_CHEST)) {
+            cir.setReturnValue(null);
+            return;
+        }
         if (BlockEntityOcclusionCuller.isProtectedType(type)) {
             return;
         }
@@ -53,14 +57,21 @@ public class BlockEntityRenderManagerMixin {
         }
 
         if (config.enableBlockEntityOcclusion) {
-            MinecraftClient mc = MinecraftClient.getInstance();
-            if (mc.gameRenderer != null && mc.gameRenderer.getCamera() != null) {
-                Vec3d camPos = mc.gameRenderer.getCamera().getCameraPos();
-                if (camPos != null) {
-                    if (BlockEntityOcclusionCuller.shouldCull(blockEntity, camPos.x, camPos.y, camPos.z)) {
-                        cir.setReturnValue(null);
-                    }
-                }
+            double camX = frustumCuller.getCameraX();
+            double camY = frustumCuller.getCameraY();
+            double camZ = frustumCuller.getCameraZ();
+
+            if (!net.vulkanplus.culling.VulkanSectionVisibility.isAabbVisible(
+                    minX, minY, minZ, maxX, maxY, maxZ, camX, camY, camZ)) {
+                frustumCuller.recordOccludedEntity();
+                BlockEntityOcclusionCuller.culledOccludedBlockEntities++;
+                cir.setReturnValue(null);
+                return;
+            }
+
+            if (BlockEntityOcclusionCuller.shouldCullUnchecked(blockEntity, camX, camY, camZ)) {
+                frustumCuller.recordOccludedEntity();
+                cir.setReturnValue(null);
             }
         }
     }

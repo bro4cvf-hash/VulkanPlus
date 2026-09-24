@@ -28,6 +28,11 @@ public abstract class GameRendererMixin {
     @Shadow
     protected abstract float getFov(Camera camera, float tickDelta, boolean changingFov);
 
+    @Inject(method = "render", at = @At("HEAD"))
+    private void onRenderBegin(RenderTickCounter tickCounter, boolean tick, CallbackInfo ci) {
+        net.vulkanplus.bridge.ViskCompatBridge.sanitizeTextureCachesIfDirty();
+    }
+
     @Inject(method = "renderWorld", at = @At("HEAD"))
     private void onRenderWorldBegin(RenderTickCounter tickCounter, CallbackInfo ci) {
         if (!net.vulkanplus.config.ConfigManager.getConfig().enabled) {
@@ -37,12 +42,10 @@ public abstract class GameRendererMixin {
         RenderOptimizer.resetFrameStats();
 
         Vec3d camPos = camera.getCameraPos();
+        net.vulkanplus.culling.FoliageCuller.updateCameraPosition(camPos.x, camPos.y, camPos.z);
         float fov = getFov(camera, tickCounter.getTickProgress(true), true);
         Matrix4f proj = getBasicProjectionMatrix(fov);
-        Quaternionf rot = camera.getRotation().conjugate(RenderOptimizer.getCachedRotation());
-        Matrix4f view = RenderOptimizer.getCachedViewMatrix().rotation(rot);
-        Matrix4f viewProj = RenderOptimizer.getCachedViewProjMatrix().set(proj).mul(view);
-        RenderOptimizer.onCameraUpdate(viewProj, camPos.x, camPos.y, camPos.z);
+        RenderOptimizer.updateCameraMatrices(proj, camera.getRotation(), camPos.x, camPos.y, camPos.z);
     }
 
     @Inject(method = "renderWorld", at = @At("RETURN"))

@@ -3,6 +3,9 @@ package net.vulkanplus.test;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.api.ModInitializer;
 import net.vulkanplus.VulkanPlusMod;
+import net.vulkanplus.config.ConfigManager;
+import net.vulkanplus.config.VulkanPlusConfig;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -10,6 +13,14 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class VulkanPlusModEntrypointTest {
+
+    @BeforeEach
+    void setUp() {
+        VulkanPlusConfig cfg = new VulkanPlusConfig();
+        cfg.enabled = true;
+        cfg.enableThreadPriority = true;
+        ConfigManager.setConfig(cfg);
+    }
 
     @Test
     @DisplayName("VulkanPlusMod implements ModInitializer interface required by fabric.mod.json main entrypoint")

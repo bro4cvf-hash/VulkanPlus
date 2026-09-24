@@ -86,21 +86,46 @@ public class VulkanModGuiIntegration {
     public static List<OptionPage> buildOptionPages() {
         VulkanPlusConfig config = ConfigManager.getConfig();
 
+        Runnable leavesReload = () -> {
+            MinecraftClient client = MinecraftClient.getInstance();
+            if (client != null) {
+                if (client.options != null) {
+                    client.options.getCutoutLeaves().setValue(!config.opaqueLeaves);
+                    client.options.write();
+                }
+                net.minecraft.client.render.BlockRenderLayers.setCutoutLeaves(!config.opaqueLeaves);
+                net.minecraft.block.LeavesBlock.setCutoutLeaves(!config.opaqueLeaves);
+                net.vulkanplus.bridge.ViskCompatBridge.invalidateAll();
+                client.reloadResourcesConcurrently();
+                if (client.worldRenderer != null) {
+                    client.worldRenderer.reload();
+                }
+            }
+        };
+
+        Consumer<Preset> applyPresetWithSideEffects = preset -> {
+            boolean oldOpaqueLeaves = config.opaqueLeaves;
+            String oldPresentMode = config.presentMode;
+            config.applyPreset(preset);
+            ConfigManager.save();
+            ThreadPriorityManager.sweepAndApplyAll();
+            if (!java.util.Objects.equals(oldPresentMode, config.presentMode)) {
+                VulkanModBridgeImpl.scheduleSwapChainUpdateIfNeeded();
+            }
+            if (oldOpaqueLeaves != config.opaqueLeaves) {
+                leavesReload.run();
+            }
+        };
+
         CyclingOption<Preset> presetOption = new CyclingOption<>(
                 Text.translatable("vulkanplus.options.preset"),
                 Preset.values(),
-                preset -> {
-                    config.applyPreset(preset);
-                    ConfigManager.save();
-                },
+                applyPresetWithSideEffects,
                 () -> config.activePreset
         );
         presetOption.setTranslator(preset -> Text.literal(preset.getDisplayName()));
         presetOption.setTooltip(preset -> Text.literal(preset.getDescription()));
-        presetOption.setOnChange(() -> {
-            config.applyPreset(presetOption.getNewValue());
-            ConfigManager.save();
-        });
+        presetOption.setOnChange(() -> applyPresetWithSideEffects.accept(presetOption.getNewValue()));
 
         Option<?>[] generalOptions = new Option<?>[]{
                 createSwitch("vulkanplus.options.enabled", val -> config.enabled = val, () -> config.enabled,
@@ -113,37 +138,52 @@ public class VulkanModGuiIntegration {
         };
         OptionBlock generalBlock = new OptionBlock(Text.translatable("vulkanplus.section.general").getString(), generalOptions);
 
-        Runnable leavesReload = () -> {
+        Runnable worldReload = () -> {
             MinecraftClient client = MinecraftClient.getInstance();
-            if (client != null) {
-                if (client.options != null) {
-                    client.options.getCutoutLeaves().setValue(!config.opaqueLeaves);
-                    client.options.write();
-                }
-                net.minecraft.client.render.BlockRenderLayers.setCutoutLeaves(!config.opaqueLeaves);
-                net.minecraft.block.LeavesBlock.setCutoutLeaves(!config.opaqueLeaves);
-                client.reloadResourcesConcurrently();
-                if (client.worldRenderer != null) {
-                    client.worldRenderer.reload();
-                }
+            if (client != null && client.worldRenderer != null) {
+                client.worldRenderer.reload();
             }
         };
+
+        Integer[] foliageDensities = new Integer[]{100, 75, 50, 25};
+        CyclingOption<Integer> foliageDensityOption = new CyclingOption<>(
+                Text.translatable("vulkanplus.options.foliageDensity"),
+                foliageDensities,
+                density -> {
+                    config.foliageDensity = density;
+                    ConfigManager.save();
+                    worldReload.run();
+                },
+                () -> config.foliageDensity
+        );
+        foliageDensityOption.setTranslator(density -> Text.literal(density + "%"));
+        foliageDensityOption.setTooltip(density -> Text.translatable("vulkanplus.options.foliageDensity.tooltip"));
+        foliageDensityOption.setImpact(PerformanceImpact.HIGH);
+        foliageDensityOption.setOnChange(() -> {
+            config.foliageDensity = foliageDensityOption.getNewValue();
+            ConfigManager.save();
+            worldReload.run();
+        });
 
         Option<?>[] foliageOptions = new Option<?>[]{
                 createSwitch("vulkanplus.options.opaqueLeaves", val -> config.opaqueLeaves = val, () -> config.opaqueLeaves,
                         "vulkanplus.options.opaqueLeaves.tooltip", PerformanceImpact.HIGH, leavesReload),
                 createSwitch("vulkanplus.options.smartLeaves", val -> config.enableSmartLeaves = val, () -> config.enableSmartLeaves,
-                        "vulkanplus.options.smartLeaves.tooltip", PerformanceImpact.MEDIUM, null)
+                        "vulkanplus.options.smartLeaves.tooltip", PerformanceImpact.MEDIUM, worldReload),
+                createSwitch("vulkanplus.options.fastFoliage", val -> config.enableFastFoliage = val, () -> config.enableFastFoliage,
+                        "vulkanplus.options.fastFoliage.tooltip", PerformanceImpact.HIGH, worldReload),
+                foliageDensityOption
         };
         OptionBlock foliageBlock = new OptionBlock(Text.translatable("vulkanplus.section.foliage").getString(), foliageOptions);
 
-        String[] presentModes = new String[]{"DEFAULT", "MAILBOX", "FIFO", "IMMEDIATE"};
+        String[] presentModes = new String[]{"DEFAULT", "MAILBOX", "IMMEDIATE", "FIFO", "FIFO_RELAXED"};
         CyclingOption<String> presentModeOption = new CyclingOption<>(
                 Text.translatable("vulkanplus.options.presentMode"),
                 presentModes,
                 mode -> {
                     config.presentMode = mode;
                     ConfigManager.save();
+                    VulkanModBridgeImpl.scheduleSwapChainUpdateIfNeeded();
                 },
                 () -> config.presentMode
         );
@@ -152,6 +192,7 @@ public class VulkanModGuiIntegration {
         presentModeOption.setOnChange(() -> {
             config.presentMode = presentModeOption.getNewValue();
             ConfigManager.save();
+            VulkanModBridgeImpl.scheduleSwapChainUpdateIfNeeded();
         });
 
         Option<?>[] vulkanOptions = new Option<?>[]{
@@ -164,7 +205,7 @@ public class VulkanModGuiIntegration {
                 createSwitch("vulkanplus.options.reverseZ", val -> config.enableReverseZ = val, () -> config.enableReverseZ,
                         "vulkanplus.options.reverseZ.tooltip", PerformanceImpact.LOW, null),
                 createSwitch("vulkanplus.options.swapchainTuning", val -> config.enableSwapchainTuning = val, () -> config.enableSwapchainTuning,
-                        "vulkanplus.options.swapchainTuning.tooltip", PerformanceImpact.MEDIUM, null),
+                        "vulkanplus.options.swapchainTuning.tooltip", PerformanceImpact.MEDIUM, VulkanModBridgeImpl::scheduleSwapChainUpdateIfNeeded),
                 presentModeOption
         };
         OptionBlock vulkanBlock = new OptionBlock(Text.translatable("vulkanplus.section.vulkan").getString(), vulkanOptions);
@@ -211,19 +252,123 @@ public class VulkanModGuiIntegration {
                 createSwitch("vulkanplus.options.fastRandom", val -> config.enableFastRandom = val, () -> config.enableFastRandom,
                         "vulkanplus.options.fastRandom.tooltip", PerformanceImpact.LOW, null),
                 createSwitch("vulkanplus.options.matrixPooling", val -> config.enableMatrixPooling = val, () -> config.enableMatrixPooling,
-                        "vulkanplus.options.matrixPooling.tooltip", PerformanceImpact.LOW, null)
+                        "vulkanplus.options.matrixPooling.tooltip", PerformanceImpact.LOW, null),
+                createSwitch("vulkanplus.options.enableC2MeOptimizations", val -> config.enableC2MeOptimizations = val, () -> config.enableC2MeOptimizations,
+                        "vulkanplus.options.enableC2MeOptimizations.tooltip", PerformanceImpact.HIGH, null),
+                createSwitch("vulkanplus.options.enableMemoryLeakFix", val -> config.enableMemoryLeakFix = val, () -> config.enableMemoryLeakFix,
+                        "vulkanplus.options.enableMemoryLeakFix.tooltip", PerformanceImpact.MEDIUM, null)
         };
         OptionBlock cpuBlock = new OptionBlock(Text.translatable("vulkanplus.section.cpu").getString(), cpuOptions);
 
-        OptionPage mainPage = new OptionPage("Vulkan Plus", new OptionBlock[]{
-                generalBlock,
+        Option<?>[] assPcOptions = new Option<?>[]{
+                createSwitch("vulkanplus.options.noMobAnimations", val -> config.noMobAnimations = val, () -> config.noMobAnimations,
+                        "vulkanplus.options.noMobAnimations.tooltip", PerformanceImpact.HIGH, null),
+                createSwitch("vulkanplus.options.noDroppedItemAnimation", val -> config.noDroppedItemAnimation = val, () -> config.noDroppedItemAnimation,
+                        "vulkanplus.options.noDroppedItemAnimation.tooltip", PerformanceImpact.LOW, null),
+                createSwitch("vulkanplus.options.staticExpAnimations", val -> config.staticExpAnimations = val, () -> config.staticExpAnimations,
+                        "vulkanplus.options.staticExpAnimations.tooltip", PerformanceImpact.LOW, null),
+                createSwitch("vulkanplus.options.noParticles", val -> config.noParticles = val, () -> config.noParticles,
+                        "vulkanplus.options.noParticles.tooltip", PerformanceImpact.HIGH, null),
+                createSwitch("vulkanplus.options.noTextureAnimations", val -> config.noTextureAnimations = val, () -> config.noTextureAnimations,
+                        "vulkanplus.options.noTextureAnimations.tooltip", PerformanceImpact.HIGH, null),
+                createSwitch("vulkanplus.options.noEntityShadows", val -> config.noEntityShadows = val, () -> config.noEntityShadows,
+                        "vulkanplus.options.noEntityShadows.tooltip", PerformanceImpact.MEDIUM, null),
+                createSwitch("vulkanplus.options.noItemGlint", val -> config.noItemGlint = val, () -> config.noItemGlint,
+                        "vulkanplus.options.noItemGlint.tooltip", PerformanceImpact.MEDIUM, null),
+                createSwitch("vulkanplus.options.noSky", val -> config.noSky = val, () -> config.noSky,
+                        "vulkanplus.options.noSky.tooltip", PerformanceImpact.HIGH, null),
+                createSwitch("vulkanplus.options.noBlockEntityAnimations", val -> config.noBlockEntityAnimations = val, () -> config.noBlockEntityAnimations,
+                        "vulkanplus.options.noBlockEntityAnimations.tooltip", PerformanceImpact.MEDIUM, null),
+                createSwitch("vulkanplus.options.noFogAndFade", val -> {
+                    config.noFog = val;
+                    config.noChunkFade = val;
+                }, () -> config.noFog || config.noChunkFade,
+                        "vulkanplus.options.noFogAndFade.tooltip", PerformanceImpact.HIGH, null),
+                createSwitch("vulkanplus.options.fastChest", val -> config.fastChest = val, () -> config.fastChest,
+                        "vulkanplus.options.fastChest.tooltip", PerformanceImpact.MEDIUM, worldReload),
+                createSwitch("vulkanplus.options.shitFoliage", val -> config.shitFoliage = val, () -> config.shitFoliage,
+                        "vulkanplus.options.shitFoliage.tooltip", PerformanceImpact.HIGH, worldReload)
+        };
+        OptionBlock assPcBlock = new OptionBlock(Text.translatable("vulkanplus.section.ass_pc").getString(), assPcOptions);
+
+        Integer[] hudFpsOptions = new Integer[]{15, 30, 45, 60, 90, 120};
+        CyclingOption<Integer> hudFpsOption = new CyclingOption<>(
+                Text.translatable("vulkanplus.options.hudTargetFps"),
+                hudFpsOptions,
+                fps -> {
+                    config.hudTargetFps = fps;
+                    ConfigManager.save();
+                },
+                () -> config.hudTargetFps
+        );
+        hudFpsOption.setTranslator(fps -> Text.literal(fps + " FPS"));
+        hudFpsOption.setTooltip(fps -> Text.translatable("vulkanplus.options.hudTargetFps.tooltip"));
+        hudFpsOption.setOnChange(() -> {
+            config.hudTargetFps = hudFpsOption.getNewValue();
+            ConfigManager.save();
+        });
+
+        Integer[] screenFpsOptions = new Integer[]{30, 60};
+        CyclingOption<Integer> screenFpsOption = new CyclingOption<>(
+                Text.translatable("vulkanplus.options.screenTargetFps"),
+                screenFpsOptions,
+                fps -> {
+                    config.screenTargetFps = fps;
+                    ConfigManager.save();
+                },
+                () -> config.screenTargetFps
+        );
+        screenFpsOption.setTranslator(fps -> Text.literal(fps + " FPS"));
+        screenFpsOption.setTooltip(fps -> Text.translatable("vulkanplus.options.screenTargetFps.tooltip"));
+        screenFpsOption.setOnChange(() -> {
+            config.screenTargetFps = screenFpsOption.getNewValue();
+            ConfigManager.save();
+        });
+
+        Option<?>[] exordiumOptions = new Option<?>[]{
+                createSwitch("vulkanplus.options.enableExordium", val -> config.enableExordium = val, () -> config.enableExordium,
+                        "vulkanplus.options.enableExordium.tooltip", PerformanceImpact.HIGH, null),
+                hudFpsOption,
+                createSwitch("vulkanplus.options.enableScreenPacing", val -> config.enableScreenPacing = val, () -> config.enableScreenPacing,
+                        "vulkanplus.options.enableScreenPacing.tooltip", PerformanceImpact.MEDIUM, null),
+                screenFpsOption,
+                createSwitch("vulkanplus.options.instantInputResponsiveness", val -> config.instantInputResponsiveness = val, () -> config.instantInputResponsiveness,
+                        "vulkanplus.options.instantInputResponsiveness.tooltip", PerformanceImpact.LOW, null),
+                createSwitch("vulkanplus.options.dynamicHudUpdates", val -> config.dynamicHudUpdates = val, () -> config.dynamicHudUpdates,
+                        "vulkanplus.options.dynamicHudUpdates.tooltip", PerformanceImpact.LOW, null),
+                createSwitch("vulkanplus.options.separateCrosshair", val -> config.separateCrosshair = val, () -> config.separateCrosshair,
+                        "vulkanplus.options.separateCrosshair.tooltip", PerformanceImpact.LOW, null),
+                createSwitch("vulkanplus.options.bypassInDebugScreen", val -> config.bypassInDebugScreen = val, () -> config.bypassInDebugScreen,
+                        "vulkanplus.options.bypassInDebugScreen.tooltip", PerformanceImpact.LOW, null),
+                createSwitch("vulkanplus.options.fastFadeTransitions", val -> config.fastFadeTransitions = val, () -> config.fastFadeTransitions,
+                        "vulkanplus.options.fastFadeTransitions.tooltip", PerformanceImpact.LOW, null)
+        };
+        OptionBlock exordiumBlock = new OptionBlock(Text.translatable("vulkanplus.section.exordium").getString(), exordiumOptions);
+
+        OptionPage generalPage = new OptionPage("General", new OptionBlock[]{
+                generalBlock
+        });
+
+        OptionPage cullingPage = new OptionPage("Culling", new OptionBlock[]{
+                cullingBlock,
+                itemFrameBlock,
+                worldBlock
+        });
+
+        OptionPage enginePage = new OptionPage("Engine", new OptionBlock[]{
                 foliageBlock,
                 vulkanBlock,
-                cullingBlock,
-                worldBlock,
-                itemFrameBlock,
                 cpuBlock
         });
-        return List.of(mainPage);
+
+        OptionPage exordiumPage = new OptionPage("⏱ Exordium", new OptionBlock[]{
+                exordiumBlock
+        });
+
+        OptionPage assPcPage = new OptionPage("🥔 ASS PC", new OptionBlock[]{
+                assPcBlock
+        });
+
+        return List.of(generalPage, cullingPage, enginePage, exordiumPage, assPcPage);
     }
 }

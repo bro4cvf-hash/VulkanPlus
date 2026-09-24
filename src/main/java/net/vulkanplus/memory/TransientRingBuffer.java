@@ -11,7 +11,7 @@ public class TransientRingBuffer {
     private final int totalSize;
     private final int frameSize;
     private final int frameCount;
-    private final ByteBuffer backingBuffer;
+    private ByteBuffer backingBuffer;
 
     private int currentFrameIndex = 0;
     private int currentOffset = 0;
@@ -28,7 +28,6 @@ public class TransientRingBuffer {
         this.frameSize = frameSize;
         this.frameCount = frameCount;
         this.totalSize = frameSize * frameCount;
-        this.backingBuffer = ByteBuffer.allocateDirect(totalSize);
     }
 
     /**
@@ -38,6 +37,10 @@ public class TransientRingBuffer {
         if (size <= 0) throw new IllegalArgumentException("Allocation size must be positive");
         if (size > frameSize) {
             throw new OutOfMemoryError("Requested allocation (" + size + " bytes) exceeds frame capacity (" + frameSize + " bytes)");
+        }
+
+        if (backingBuffer == null) {
+            backingBuffer = ByteBuffer.allocateDirect(totalSize);
         }
 
         int alignedOffset = (currentOffset + (alignment - 1)) & ~(alignment - 1);
@@ -55,6 +58,10 @@ public class TransientRingBuffer {
         backingBuffer.position(alignedOffset);
         backingBuffer.limit(alignedOffset + size);
         return backingBuffer.slice();
+    }
+
+    public synchronized boolean isBackingAllocated() {
+        return backingBuffer != null;
     }
 
     /**

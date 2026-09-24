@@ -135,6 +135,8 @@ public class ConfigManager {
         sb.append("  \"enableParticleCulling\": ").append(config.enableParticleCulling).append(",\n");
         sb.append("  \"enableMatrixPooling\": ").append(config.enableMatrixPooling).append(",\n");
         sb.append("  \"opaqueLeaves\": ").append(config.opaqueLeaves).append(",\n");
+        sb.append("  \"enableFastFoliage\": ").append(config.enableFastFoliage).append(",\n");
+        sb.append("  \"foliageDensity\": ").append(config.foliageDensity).append(",\n");
         sb.append("  \"enableThreadPriority\": ").append(config.enableThreadPriority).append(",\n");
         sb.append("  \"renderThreadPriority\": ").append(config.renderThreadPriority).append(",\n");
         sb.append("  \"workerThreadPriority\": ").append(config.workerThreadPriority).append(",\n");
@@ -149,6 +151,21 @@ public class ConfigManager {
         sb.append("  \"chestProtection\": ").append(config.chestProtection).append(",\n");
         sb.append("  \"showDiagnosticsHud\": ").append(config.showDiagnosticsHud).append(",\n");
         sb.append("  \"showFps\": ").append(config.showFps).append(",\n");
+        sb.append("  \"noMobAnimations\": ").append(config.noMobAnimations).append(",\n");
+        sb.append("  \"noDroppedItemAnimation\": ").append(config.noDroppedItemAnimation).append(",\n");
+        sb.append("  \"staticExpAnimations\": ").append(config.staticExpAnimations).append(",\n");
+        sb.append("  \"noParticles\": ").append(config.noParticles).append(",\n");
+        sb.append("  \"noTextureAnimations\": ").append(config.noTextureAnimations).append(",\n");
+        sb.append("  \"noEntityShadows\": ").append(config.noEntityShadows).append(",\n");
+        sb.append("  \"noItemGlint\": ").append(config.noItemGlint).append(",\n");
+        sb.append("  \"noSky\": ").append(config.noSky).append(",\n");
+        sb.append("  \"noFog\": ").append(config.noFog).append(",\n");
+        sb.append("  \"noBlockEntityAnimations\": ").append(config.noBlockEntityAnimations).append(",\n");
+        sb.append("  \"noChunkFade\": ").append(config.noChunkFade).append(",\n");
+        sb.append("  \"fastChest\": ").append(config.fastChest).append(",\n");
+        sb.append("  \"shitFoliage\": ").append(config.shitFoliage).append(",\n");
+        sb.append("  \"enableMemoryLeakFix\": ").append(config.enableMemoryLeakFix).append(",\n");
+        sb.append("  \"enableC2MeOptimizations\": ").append(config.enableC2MeOptimizations).append(",\n");
         sb.append("  \"activePreset\": \"").append(config.activePreset.name()).append("\"\n");
         sb.append("}\n");
         return sb.toString();
@@ -199,6 +216,10 @@ public class ConfigManager {
         if (map.containsKey("enableParticleCulling")) target.enableParticleCulling = Boolean.parseBoolean(map.get("enableParticleCulling"));
         if (map.containsKey("enableMatrixPooling")) target.enableMatrixPooling = Boolean.parseBoolean(map.get("enableMatrixPooling"));
         if (map.containsKey("opaqueLeaves")) target.opaqueLeaves = Boolean.parseBoolean(map.get("opaqueLeaves"));
+        if (map.containsKey("enableFastFoliage")) target.enableFastFoliage = Boolean.parseBoolean(map.get("enableFastFoliage"));
+        if (map.containsKey("foliageDensity")) {
+            try { target.foliageDensity = Integer.parseInt(map.get("foliageDensity")); } catch (NumberFormatException ignored) {}
+        }
 
         if (map.containsKey("enableThreadPriority")) target.enableThreadPriority = Boolean.parseBoolean(map.get("enableThreadPriority"));
         if (map.containsKey("renderThreadPriority")) {
@@ -230,6 +251,21 @@ public class ConfigManager {
         if (map.containsKey("chestProtection")) target.chestProtection = Boolean.parseBoolean(map.get("chestProtection"));
         if (map.containsKey("showDiagnosticsHud")) target.showDiagnosticsHud = Boolean.parseBoolean(map.get("showDiagnosticsHud"));
         if (map.containsKey("showFps")) target.showFps = Boolean.parseBoolean(map.get("showFps"));
+        if (map.containsKey("noMobAnimations")) target.noMobAnimations = Boolean.parseBoolean(map.get("noMobAnimations"));
+        if (map.containsKey("noDroppedItemAnimation")) target.noDroppedItemAnimation = Boolean.parseBoolean(map.get("noDroppedItemAnimation"));
+        if (map.containsKey("staticExpAnimations")) target.staticExpAnimations = Boolean.parseBoolean(map.get("staticExpAnimations"));
+        if (map.containsKey("noParticles")) target.noParticles = Boolean.parseBoolean(map.get("noParticles"));
+        if (map.containsKey("noTextureAnimations")) target.noTextureAnimations = Boolean.parseBoolean(map.get("noTextureAnimations"));
+        if (map.containsKey("noEntityShadows")) target.noEntityShadows = Boolean.parseBoolean(map.get("noEntityShadows"));
+        if (map.containsKey("noItemGlint")) target.noItemGlint = Boolean.parseBoolean(map.get("noItemGlint"));
+        if (map.containsKey("noSky")) target.noSky = Boolean.parseBoolean(map.get("noSky"));
+        if (map.containsKey("noFog")) target.noFog = Boolean.parseBoolean(map.get("noFog"));
+        if (map.containsKey("noBlockEntityAnimations")) target.noBlockEntityAnimations = Boolean.parseBoolean(map.get("noBlockEntityAnimations"));
+        if (map.containsKey("noChunkFade")) target.noChunkFade = Boolean.parseBoolean(map.get("noChunkFade"));
+        if (map.containsKey("fastChest")) target.fastChest = Boolean.parseBoolean(map.get("fastChest"));
+        if (map.containsKey("shitFoliage")) target.shitFoliage = Boolean.parseBoolean(map.get("shitFoliage"));
+        if (map.containsKey("enableMemoryLeakFix")) target.enableMemoryLeakFix = Boolean.parseBoolean(map.get("enableMemoryLeakFix"));
+        if (map.containsKey("enableC2MeOptimizations")) target.enableC2MeOptimizations = Boolean.parseBoolean(map.get("enableC2MeOptimizations"));
         if (map.containsKey("activePreset")) {
             try { target.activePreset = Preset.valueOf(map.get("activePreset")); } catch (Exception ignored) {}
         }

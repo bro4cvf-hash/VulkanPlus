@@ -26,6 +26,8 @@ public class VulkanPlusConfig {
     public boolean enableParticleCulling = true;
     public boolean enableMatrixPooling = true;
     public boolean opaqueLeaves = false;
+    public boolean enableFastFoliage = true;
+    public int foliageDensity = 100;
 
     public boolean enableThreadPriority = true;
     public int renderThreadPriority = 8;
@@ -45,6 +47,43 @@ public class VulkanPlusConfig {
     public boolean showDiagnosticsHud = false;
     public boolean showFps = false;
     public Preset activePreset = Preset.BALANCED;
+
+    // Exordium (GUI & HUD Framerate Decoupling)
+    public boolean enableExordium = false;
+    public int hudTargetFps = 60;
+    public boolean enableScreenPacing = true;
+    public int screenTargetFps = 60;
+    public boolean instantInputResponsiveness = true;
+    public boolean dynamicHudUpdates = true;
+    public boolean separateCrosshair = true;
+    public boolean bypassInDebugScreen = true;
+    public boolean fastFadeTransitions = true;
+
+    // ASS PC (Extreme Potato Mode) - All false by default
+    public boolean noMobAnimations = false;
+    public boolean noDroppedItemAnimation = false;
+    public boolean staticExpAnimations = false;
+    public boolean noParticles = false;
+    public boolean noTextureAnimations = false;
+    public boolean noEntityShadows = false;
+    public boolean noItemGlint = false;
+    public boolean noSky = false;
+    public boolean noFog = false;
+    public boolean noBlockEntityAnimations = false;
+    public boolean noChunkFade = false;
+    public boolean fastChest = false;
+    public boolean shitFoliage = false;
+
+    // Engine optimizations (C2ME & MemoryLeakFix) - Enabled by default
+    public boolean enableMemoryLeakFix = true;
+    public boolean enableC2MeOptimizations = true;
+
+    public boolean isAssPcActive() {
+        return noMobAnimations || noDroppedItemAnimation || staticExpAnimations
+                || noParticles || noTextureAnimations || noEntityShadows
+                || noItemGlint || noSky || noFog || noBlockEntityAnimations
+                || noChunkFade || fastChest || shitFoliage;
+    }
 
     public VulkanPlusConfig() {
     }
@@ -74,6 +113,8 @@ public class VulkanPlusConfig {
                 this.enableParticleCulling = true;
                 this.enableMatrixPooling = true;
                 this.opaqueLeaves = true;
+                this.enableFastFoliage = true;
+                this.foliageDensity = 75;
                 this.enableThreadPriority = true;
                 this.renderThreadPriority = 9;
                 this.workerThreadPriority = 1;
@@ -86,6 +127,15 @@ public class VulkanPlusConfig {
                 this.particleCullingDistance = 24.0;
                 this.beaconProtection = true;
                 this.chestProtection = true;
+                this.enableExordium = false;
+                this.hudTargetFps = 30;
+                this.enableScreenPacing = true;
+                this.screenTargetFps = 30;
+                this.instantInputResponsiveness = true;
+                this.dynamicHudUpdates = true;
+                this.separateCrosshair = true;
+                this.bypassInDebugScreen = true;
+                this.fastFadeTransitions = true;
             }
             case BALANCED -> {
                 this.enableBufferPooling = true;
@@ -106,6 +156,8 @@ public class VulkanPlusConfig {
                 this.enableParticleCulling = true;
                 this.enableMatrixPooling = true;
                 this.opaqueLeaves = false;
+                this.enableFastFoliage = true;
+                this.foliageDensity = 100;
                 this.enableThreadPriority = true;
                 this.renderThreadPriority = 8;
                 this.workerThreadPriority = 2;
@@ -118,6 +170,15 @@ public class VulkanPlusConfig {
                 this.particleCullingDistance = 32.0;
                 this.beaconProtection = true;
                 this.chestProtection = true;
+                this.enableExordium = false;
+                this.hudTargetFps = 60;
+                this.enableScreenPacing = true;
+                this.screenTargetFps = 60;
+                this.instantInputResponsiveness = true;
+                this.dynamicHudUpdates = true;
+                this.separateCrosshair = true;
+                this.bypassInDebugScreen = true;
+                this.fastFadeTransitions = true;
             }
             case EXTREME -> {
                 this.enableBufferPooling = true;
@@ -138,6 +199,8 @@ public class VulkanPlusConfig {
                 this.enableParticleCulling = true;
                 this.enableMatrixPooling = true;
                 this.opaqueLeaves = true;
+                this.enableFastFoliage = true;
+                this.foliageDensity = 50;
                 this.enableThreadPriority = true;
                 this.renderThreadPriority = 9;
                 this.workerThreadPriority = 1;
@@ -150,6 +213,15 @@ public class VulkanPlusConfig {
                 this.particleCullingDistance = 16.0;
                 this.beaconProtection = true;
                 this.chestProtection = false;
+                this.enableExordium = false;
+                this.hudTargetFps = 30;
+                this.enableScreenPacing = true;
+                this.screenTargetFps = 30;
+                this.instantInputResponsiveness = true;
+                this.dynamicHudUpdates = true;
+                this.separateCrosshair = true;
+                this.bypassInDebugScreen = true;
+                this.fastFadeTransitions = true;
             }
         }
     }
@@ -179,8 +251,15 @@ public class VulkanPlusConfig {
                 && this.enableParticleCulling == sample.enableParticleCulling
                 && this.enableMatrixPooling == sample.enableMatrixPooling
                 && this.opaqueLeaves == sample.opaqueLeaves
+                && this.enableFastFoliage == sample.enableFastFoliage
+                && this.foliageDensity == sample.foliageDensity
                 && this.enableThreadPriority == sample.enableThreadPriority
-                && this.chestProtection == sample.chestProtection;
+                && this.chestProtection == sample.chestProtection
+                && this.enableExordium == sample.enableExordium
+                && this.hudTargetFps == sample.hudTargetFps
+                && this.enableScreenPacing == sample.enableScreenPacing
+                && this.screenTargetFps == sample.screenTargetFps
+                && this.separateCrosshair == sample.separateCrosshair;
     }
 
     /**
@@ -217,6 +296,8 @@ public class VulkanPlusConfig {
         clone.enableParticleCulling = this.enableParticleCulling;
         clone.enableMatrixPooling = this.enableMatrixPooling;
         clone.opaqueLeaves = this.opaqueLeaves;
+        clone.enableFastFoliage = this.enableFastFoliage;
+        clone.foliageDensity = this.foliageDensity;
         clone.enableThreadPriority = this.enableThreadPriority;
         clone.renderThreadPriority = this.renderThreadPriority;
         clone.workerThreadPriority = this.workerThreadPriority;
@@ -232,6 +313,30 @@ public class VulkanPlusConfig {
         clone.showDiagnosticsHud = this.showDiagnosticsHud;
         clone.showFps = this.showFps;
         clone.activePreset = this.activePreset;
+        clone.noMobAnimations = this.noMobAnimations;
+        clone.noDroppedItemAnimation = this.noDroppedItemAnimation;
+        clone.staticExpAnimations = this.staticExpAnimations;
+        clone.noParticles = this.noParticles;
+        clone.noTextureAnimations = this.noTextureAnimations;
+        clone.noEntityShadows = this.noEntityShadows;
+        clone.noItemGlint = this.noItemGlint;
+        clone.noSky = this.noSky;
+        clone.noFog = this.noFog;
+        clone.noBlockEntityAnimations = this.noBlockEntityAnimations;
+        clone.noChunkFade = this.noChunkFade;
+        clone.fastChest = this.fastChest;
+        clone.shitFoliage = this.shitFoliage;
+        clone.enableMemoryLeakFix = this.enableMemoryLeakFix;
+        clone.enableC2MeOptimizations = this.enableC2MeOptimizations;
+        clone.enableExordium = this.enableExordium;
+        clone.hudTargetFps = this.hudTargetFps;
+        clone.enableScreenPacing = this.enableScreenPacing;
+        clone.screenTargetFps = this.screenTargetFps;
+        clone.instantInputResponsiveness = this.instantInputResponsiveness;
+        clone.dynamicHudUpdates = this.dynamicHudUpdates;
+        clone.separateCrosshair = this.separateCrosshair;
+        clone.bypassInDebugScreen = this.bypassInDebugScreen;
+        clone.fastFadeTransitions = this.fastFadeTransitions;
         return clone;
     }
 }

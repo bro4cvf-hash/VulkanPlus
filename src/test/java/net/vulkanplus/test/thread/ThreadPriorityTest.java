@@ -94,15 +94,21 @@ public class ThreadPriorityTest {
             try { Thread.sleep(1000); } catch (InterruptedException ignored) {}
         }, "IO-Worker-SweepTest");
 
+        Thread builderThread = new Thread(() -> {
+            try { Thread.sleep(1000); } catch (InterruptedException ignored) {}
+        }, "Builder-0");
+
         renderThread.start();
         workerThread.start();
         ioThread.start();
+        builderThread.start();
 
         try {
             ThreadPriorityManager.sweepAndApplyAll();
 
             assertEquals(8, renderThread.getPriority(), "Render thread should be elevated to 8");
             assertEquals(1, workerThread.getPriority(), "Worker thread should be deprioritized to 1");
+            assertEquals(1, builderThread.getPriority(), "VulkanMod Builder-0 thread should be deprioritized to 1");
             assertEquals(3, ioThread.getPriority(), "IO worker should be set to 3");
 
             // Disable and sweep again
@@ -114,14 +120,17 @@ public class ThreadPriorityTest {
 
             assertEquals(Thread.NORM_PRIORITY, renderThread.getPriority(), "Render thread should return to 5");
             assertEquals(Thread.NORM_PRIORITY, workerThread.getPriority(), "Worker thread should return to 5");
+            assertEquals(Thread.NORM_PRIORITY, builderThread.getPriority(), "Builder-0 thread should return to 5");
             assertEquals(Thread.NORM_PRIORITY, ioThread.getPriority(), "IO worker should return to 5");
         } finally {
             renderThread.interrupt();
             workerThread.interrupt();
             ioThread.interrupt();
+            builderThread.interrupt();
             renderThread.join(500);
             workerThread.join(500);
             ioThread.join(500);
+            builderThread.join(500);
         }
     }
 

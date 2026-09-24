@@ -22,6 +22,8 @@ config/
 # Agent & Local Indexing Cache
 .agents/
 .codegraph/
+ORIGINAL_REQUEST.md
+PROJECT.md
 
 # Documentation & Non-code assets
 docs/

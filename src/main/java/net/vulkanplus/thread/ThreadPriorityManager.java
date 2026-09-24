@@ -90,7 +90,7 @@ public class ThreadPriorityManager {
             try {
                 if (name.equals("Render thread") || name.equals("Minecraft main thread")) {
                     t.setPriority(active ? renderPri : Thread.NORM_PRIORITY);
-                } else if (name.startsWith("Worker-") || name.startsWith("Server-Worker") || name.startsWith("Main-")) {
+                } else if (name.startsWith("Worker-") || name.startsWith("Server-Worker") || name.startsWith("Main-") || name.startsWith("Builder-")) {
                     t.setPriority(active ? workerPri : Thread.NORM_PRIORITY);
                 } else if (name.startsWith("IO-Worker-") || name.startsWith("Download-")) {
                     t.setPriority(active ? ioPri : Thread.NORM_PRIORITY);

@@ -14,8 +14,9 @@ import net.vulkanplus.vulkan.VulkanStateCache;
  * Manages native memory pools, PSO disk cache, state caching, and swapchain pacing.
  */
 public class VulkanModBridgeImpl implements RenderEngineBridge {
+    private static final VulkanStateCache STATE_CACHE = new VulkanStateCache();
     private final PersistentPipelineCache psoCache = new PersistentPipelineCache();
-    private final VulkanStateCache stateCache = new VulkanStateCache();
+    private final VulkanStateCache stateCache = STATE_CACHE;
     private TransientRingBuffer ringBuffer;
     private SlabSubAllocator slabAllocator;
 
@@ -45,13 +46,26 @@ public class VulkanModBridgeImpl implements RenderEngineBridge {
             VulkanPlusMod.LOGGER.info("[VulkanPlus] Transient ring buffer and slab sub-allocator initialized.");
         }
 
-        if (config.enablePsoCache) {
-            psoCache.loadCacheData(0, 0, null);
+        try {
+            if (config.enabled && config.enableSwapchainTuning && net.vulkanmod.Initializer.CONFIG != null) {
+                if (net.vulkanmod.Initializer.CONFIG.frameQueueSize < 3) {
+                    net.vulkanmod.Initializer.CONFIG.frameQueueSize = 3;
+                    VulkanPlusMod.LOGGER.info("[VulkanPlus] Tuned VulkanMod frameQueueSize to 3 for triple-buffered frame pacing.");
+                }
+            }
+        } catch (Throwable ignored) {
         }
 
         VulkanModGuiIntegration.register();
 
         isInitialized = true;
+    }
+
+    public static void scheduleSwapChainUpdateIfNeeded() {
+        try {
+            net.vulkanmod.vulkan.Renderer.scheduleSwapChainUpdate();
+        } catch (Throwable ignored) {
+        }
     }
 
     @Override
@@ -84,6 +98,17 @@ public class VulkanModBridgeImpl implements RenderEngineBridge {
 
     @Override
     public long getVramUsed() {
+        try {
+            net.vulkanmod.vulkan.memory.MemoryManager mm = net.vulkanmod.vulkan.memory.MemoryManager.getInstance();
+            if (mm != null) {
+                long usedMb = mm.getAllocatedDeviceMemoryMB();
+                if (usedMb > 0) {
+                    return usedMb * 1024L * 1024L;
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+
         long used = 0;
         if (ringBuffer != null) {
             used += ringBuffer.getUsedBytesInCurrentFrame();
@@ -96,8 +121,19 @@ public class VulkanModBridgeImpl implements RenderEngineBridge {
 
     @Override
     public long getVramAllocated() {
+        try {
+            net.vulkanmod.vulkan.memory.MemoryManager mm = net.vulkanmod.vulkan.memory.MemoryManager.getInstance();
+            if (mm != null) {
+                long deviceMb = mm.getDeviceMemoryMB();
+                if (deviceMb > 0) {
+                    return deviceMb * 1024L * 1024L;
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+
         long allocated = 0;
-        if (ringBuffer != null) {
+        if (ringBuffer != null && ringBuffer.isBackingAllocated()) {
             allocated += ringBuffer.getTotalSize();
         }
         if (slabAllocator != null) {
@@ -110,8 +146,8 @@ public class VulkanModBridgeImpl implements RenderEngineBridge {
         return psoCache;
     }
 
-    public VulkanStateCache getStateCache() {
-        return stateCache;
+    public static VulkanStateCache getStateCache() {
+        return STATE_CACHE;
     }
 
     public TransientRingBuffer getRingBuffer() {

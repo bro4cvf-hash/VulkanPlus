@@ -58,11 +58,15 @@ public class MixinTargetAdversarialTest {
                                     targets.add(t.getClassName());
                                 }
                             }
-                        } else if ("targets".equals(name) && val instanceof List<?> list) {
-                            for (Object item : list) {
-                                if (item instanceof String s) {
-                                    targets.add(s);
+                        } else if ("targets".equals(name)) {
+                            if (val instanceof List<?> list) {
+                                for (Object item : list) {
+                                    if (item instanceof String s) {
+                                        targets.add(s);
+                                    }
                                 }
+                            } else if (val instanceof String s) {
+                                targets.add(s);
                             }
                         }
                     }
@@ -184,6 +188,89 @@ public class MixinTargetAdversarialTest {
             }
         }
         assertTrue(foundMethod, "ItemFrameEntityRendererMixin must declare onUpdateRenderState method");
+    }
+
+    @Test
+    @DisplayName("Verify exact VulkanMod bytecode descriptors for all 6 Phase 2 Mixin targets")
+    void testVulkanModMixinMethodDescriptors() throws Exception {
+        // 1. Exact bytecode descriptor verification via ASM ClassReader on vulkanmod-0.6.8+1.21.11.jar
+        assertBytecodeMethodDescriptor("net.vulkanmod.vulkan.memory.MemoryTypes", "createMemoryTypes", "()V");
+        assertBytecodeMethodDescriptor("net.vulkanmod.vulkan.Renderer", "bindGraphicsPipeline", "(Lnet/vulkanmod/vulkan/shader/GraphicsPipeline;)V");
+        assertBytecodeMethodDescriptor("net.vulkanmod.render.chunk.build.task.TaskDispatcher", "updateSections", "()Z");
+        assertBytecodeMethodDescriptor("net.vulkanmod.render.chunk.buffer.AreaBuffer", "reallocate", "(I)Lnet/vulkanmod/render/chunk/buffer/AreaBuffer$Segment;");
+        assertBytecodeMethodDescriptor("net.vulkanmod.vulkan.framebuffer.SwapChain", "getPresentMode", "(Ljava/nio/IntBuffer;)I");
+        assertBytecodeMethodDescriptor("net.vulkanmod.vulkan.shader.Pipeline", "createPipelineCache", "()J");
+        assertBytecodeMethodDescriptor("net.vulkanmod.vulkan.shader.Pipeline", "destroyPipelineCache", "()V");
+
+        // 2. Reflective verification of declared methods
+        Class<?> memoryTypesClass = Class.forName("net.vulkanmod.vulkan.memory.MemoryTypes", false, getClass().getClassLoader());
+        assertNotNull(memoryTypesClass.getDeclaredMethod("createMemoryTypes"));
+
+        Class<?> graphicsPipelineClass = Class.forName("net.vulkanmod.vulkan.shader.GraphicsPipeline", false, getClass().getClassLoader());
+        Class<?> rendererClass = Class.forName("net.vulkanmod.vulkan.Renderer", false, getClass().getClassLoader());
+        assertNotNull(rendererClass.getDeclaredMethod("bindGraphicsPipeline", graphicsPipelineClass));
+
+        Class<?> taskDispatcherClass = Class.forName("net.vulkanmod.render.chunk.build.task.TaskDispatcher", false, getClass().getClassLoader());
+        assertNotNull(taskDispatcherClass.getDeclaredMethod("updateSections"));
+        assertNotNull(taskDispatcherClass.getDeclaredMethod("createThreads", int.class));
+
+        Class<?> areaBufferClass = Class.forName("net.vulkanmod.render.chunk.buffer.AreaBuffer", false, getClass().getClassLoader());
+        assertNotNull(areaBufferClass.getDeclaredMethod("reallocate", int.class));
+
+        Class<?> swapChainClass = Class.forName("net.vulkanmod.vulkan.framebuffer.SwapChain", false, getClass().getClassLoader());
+        assertNotNull(swapChainClass.getDeclaredMethod("getPresentMode", java.nio.IntBuffer.class));
+
+        Class<?> pipelineClass = Class.forName("net.vulkanmod.vulkan.shader.Pipeline", false, getClass().getClassLoader());
+        assertNotNull(pipelineClass.getDeclaredMethod("createPipelineCache"));
+        assertNotNull(pipelineClass.getDeclaredMethod("destroyPipelineCache"));
+    }
+
+    @Test
+    @DisplayName("Verify MemoryTypesMixin, TaskDispatcherMixin, and RendererMixin structure and plugin registration")
+    void testPhase2VulkanMixinsStructureAndRegistration() throws Exception {
+        List<String> mixinClasses = loadMixinClassesFromConfig("/vulkanplus.mixins.json");
+        assertTrue(mixinClasses.contains("net.vulkanplus.mixin.vulkan.MemoryTypesMixin"),
+                "vulkanplus.mixins.json must register vulkan.MemoryTypesMixin");
+        assertTrue(mixinClasses.contains("net.vulkanplus.mixin.vulkan.TaskDispatcherMixin"),
+                "vulkanplus.mixins.json must register vulkan.TaskDispatcherMixin");
+        assertTrue(mixinClasses.contains("net.vulkanplus.mixin.vulkan.RendererMixin"),
+                "vulkanplus.mixins.json must register vulkan.RendererMixin");
+
+        assertBytecodeMethodDescriptor("net.vulkanplus.mixin.vulkan.MemoryTypesMixin",
+                "vulkanplus$enableReBarDeviceMappableMemory",
+                "(Lorg/spongepowered/asm/mixin/injection/callback/CallbackInfo;)V");
+        assertBytecodeMethodDescriptor("net.vulkanplus.mixin.vulkan.TaskDispatcherMixin",
+                "vulkanplus$budgetedUpdateSections",
+                "(Lorg/spongepowered/asm/mixin/injection/callback/CallbackInfoReturnable;)V");
+        assertBytecodeMethodDescriptor("net.vulkanplus.mixin.vulkan.RendererMixin",
+                "vulkanplus$deduplicateBindGraphicsPipeline",
+                "(Lnet/vulkanmod/vulkan/shader/GraphicsPipeline;Lorg/spongepowered/asm/mixin/injection/callback/CallbackInfo;)V");
+        assertBytecodeMethodDescriptor("net.vulkanplus.mixin.vulkan.RendererMixin",
+                "vulkanplus$onBeginMainRenderPass",
+                "(Lorg/lwjgl/system/MemoryStack;Lorg/spongepowered/asm/mixin/injection/callback/CallbackInfo;)V");
+    }
+
+    private void assertBytecodeMethodDescriptor(String className, String methodName, String expectedDescriptor) throws Exception {
+        String resourcePath = "/" + className.replace('.', '/') + ".class";
+        try (InputStream is = getClass().getResourceAsStream(resourcePath)) {
+            assertNotNull(is, "Class resource must exist on test classpath: " + resourcePath);
+            ClassReader cr = new ClassReader(is);
+            ClassNode cn = new ClassNode();
+            cr.accept(cn, ClassReader.SKIP_CODE | ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
+
+            boolean matched = false;
+            if (cn.methods != null) {
+                for (org.objectweb.asm.tree.MethodNode mn : cn.methods) {
+                    if (methodName.equals(mn.name) && expectedDescriptor.equals(mn.desc)) {
+                        matched = true;
+                        break;
+                    }
+                }
+            }
+            assertTrue(matched, () -> String.format(
+                    "Expected bytecode method %s.%s%s not found in %s",
+                    className, methodName, expectedDescriptor, resourcePath));
+        }
     }
 
     private List<String> loadMixinClassesFromConfig(String resourcePath) throws Exception {

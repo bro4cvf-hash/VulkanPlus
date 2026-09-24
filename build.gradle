@@ -49,6 +49,8 @@ dependencies {
 
     // VulkanMod (Companion dependency - compileOnly ensures standalone safety)
     modCompileOnly "maven.modrinth:vulkanmod:${project.vulkanmod_version}"
+    testCompileOnly "maven.modrinth:vulkanmod:${project.vulkanmod_version}"
+    testRuntimeOnly "maven.modrinth:vulkanmod:${project.vulkanmod_version}"
 
     // LWJGL 3 Vulkan Bindings (bundled via Jar-in-Jar)
     implementation "org.lwjgl:lwjgl-vulkan:${project.lwjgl_version}"

@@ -50,4 +50,33 @@ public class ParticleCullerTest {
         ConfigManager.getConfig().enableParticleCulling = false;
         assertTrue(particleCuller.shouldRenderParticle(0, 0, -100, 0.2f));
     }
+
+    @Test
+    @DisplayName("ParticleCuller: shouldRenderInFrustumParticle scales distance by cullingDistanceFactor and skips frustum re-test")
+    public void testShouldRenderInFrustumParticleDistanceScaling() {
+        ConfigManager.getConfig().enableParticleCulling = true;
+        ConfigManager.getConfig().particleCullingDistance = 32.0;
+        ConfigManager.getConfig().cullingDistanceFactor = 0.5; // effective maxDist = 16.0
+        particleCuller.updateCamera(0, 0, 0);
+        particleCuller.resetStats();
+
+        assertTrue(particleCuller.shouldRenderInFrustumParticle(0, 0, -15.0),
+                "Particle at 15 blocks must pass when effective maxDist is 16");
+        assertFalse(particleCuller.shouldRenderInFrustumParticle(0, 0, -20.0),
+                "Particle at 20 blocks must be culled when effective maxDist is 16");
+        assertEquals(1, particleCuller.getCulledParticleCount());
+        ConfigManager.getConfig().cullingDistanceFactor = 1.0;
+    }
+
+    @Test
+    @DisplayName("VulkanSectionVisibility: Open-sky and boundary-straddling AABBs never falsely cull")
+    public void testVulkanSectionVisibilitySafety() {
+        assertTrue(net.vulkanplus.culling.VulkanSectionVisibility.isPositionVisible(0, 350, -50, 0, 64, 0),
+                "Open-sky position above world build height (Y=350) must never be falsely culled");
+        assertTrue(net.vulkanplus.culling.VulkanSectionVisibility.isAabbVisible(
+                15.2, 63.8, -20.5,
+                16.8, 65.8, -19.5,
+                0, 64, 0
+        ), "Entity AABB straddling 16-block section boundaries must remain visible when section graph is inactive/out-of-bounds");
+    }
 }

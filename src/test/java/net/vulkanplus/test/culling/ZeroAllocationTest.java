@@ -306,4 +306,15 @@ public class ZeroAllocationTest {
         assertEquals(50000, particleCuller.getTotalParticleCount(), "Must have evaluated exactly 50,000 particles");
         assertTrue(durationMs < 2000, "50,000 particles must be evaluated in under 2 seconds, took " + durationMs + " ms");
     }
+
+    @Test
+    @DisplayName("TransientRingBuffer lazily allocates direct backing buffer only on first allocate() call")
+    public void testLazyTransientRingBufferAllocation() {
+        net.vulkanplus.memory.TransientRingBuffer ring = new net.vulkanplus.memory.TransientRingBuffer(1024);
+        assertFalse(ring.isBackingAllocated(), "Backing direct ByteBuffer must not be allocated before allocate()");
+        ring.advanceFrame();
+        assertFalse(ring.isBackingAllocated(), "advanceFrame() must not trigger backing buffer allocation");
+        assertNotNull(ring.allocate(64, 16));
+        assertTrue(ring.isBackingAllocated(), "Backing direct ByteBuffer must be allocated on first allocate()");
+    }
 }
