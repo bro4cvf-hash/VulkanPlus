@@ -262,6 +262,16 @@ public class VulkanModGuiIntegration {
         OptionBlock cpuBlock = new OptionBlock(Text.translatable("vulkanplus.section.cpu").getString(), cpuOptions);
 
         Option<?>[] assPcOptions = new Option<?>[]{
+                createSwitch("vulkanplus.options.fullBright", val -> config.fullBright = val, () -> config.fullBright,
+                        "vulkanplus.options.fullBright.tooltip", PerformanceImpact.HIGH, () -> {
+                            MinecraftClient client = MinecraftClient.getInstance();
+                            if (client != null) {
+                                if (client.worldRenderer != null) client.worldRenderer.reload();
+                                if (client.gameRenderer != null && client.gameRenderer.getLightmapTextureManager() != null) {
+                                    client.gameRenderer.getLightmapTextureManager().tick();
+                                }
+                            }
+                        }),
                 createSwitch("vulkanplus.options.noMobAnimations", val -> config.noMobAnimations = val, () -> config.noMobAnimations,
                         "vulkanplus.options.noMobAnimations.tooltip", PerformanceImpact.HIGH, null),
                 createSwitch("vulkanplus.options.noDroppedItemAnimation", val -> config.noDroppedItemAnimation = val, () -> config.noDroppedItemAnimation,

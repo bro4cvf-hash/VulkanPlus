@@ -23,6 +23,8 @@ public class VulkanModMixinPlugin implements IMixinConfigPlugin {
             "net.vulkanplus.mixin.vulkan.RendererMixin",
             "net.vulkanplus.mixin.vulkan.WorldRendererMixin",
             "net.vulkanplus.mixin.vulkan.VRenderSystemMixin",
+            "net.vulkanplus.mixin.vulkan.DescriptorSetsMixin",
+            "net.vulkanplus.mixin.vulkan.MemoryManagerMixin",
             "net.vulkanplus.mixin.culling.VulkanBlockRendererMixin"
     );
 
@@ -60,6 +62,12 @@ public class VulkanModMixinPlugin implements IMixinConfigPlugin {
         }
         if (mixinClassName.contains(".c2me.") && isModLoaded("c2me")) {
             return false;
+        }
+        if (isModLoaded("lomka")) {
+            if (mixinClassName.contains(".math.BoxMixin")
+                    || mixinClassName.contains(".world.")) {
+                return false;
+            }
         }
         if (VULKANMOD_MIXINS.contains(mixinClassName)
                 || mixinClassName.contains(".mixin.vulkan.")

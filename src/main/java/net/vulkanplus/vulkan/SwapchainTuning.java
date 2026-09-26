@@ -17,12 +17,13 @@ public class SwapchainTuning {
      * Resolves the desired present mode string into Vulkan present mode enum.
      */
     public static int parsePresentMode(String modeName) {
-        if (modeName == null) return VK_PRESENT_MODE_FIFO_KHR;
+        if (modeName == null) return VK_PRESENT_MODE_MAILBOX_KHR;
         return switch (modeName.toUpperCase().trim()) {
             case "IMMEDIATE" -> VK_PRESENT_MODE_IMMEDIATE_KHR;
             case "MAILBOX" -> VK_PRESENT_MODE_MAILBOX_KHR;
+            case "FIFO" -> VK_PRESENT_MODE_FIFO_KHR;
             case "FIFO_RELAXED" -> VK_PRESENT_MODE_FIFO_RELAXED_KHR;
-            default -> VK_PRESENT_MODE_FIFO_KHR;
+            default -> VK_PRESENT_MODE_MAILBOX_KHR;
         };
     }
 
@@ -74,21 +75,14 @@ public class SwapchainTuning {
 
     /**
      * Determines the optimal swapchain image count to prevent starvation.
-     * When MAILBOX or FIFO is used, returns Math.max(3, minImageCount + 1)
-     * (clamped to maxImageCount if maxImageCount > 0), preventing AMD Mailbox 2-image starvation.
+     * Returns Math.max(3, minImageCount + 1) clamped to maxImageCount if maxImageCount > 0,
+     * ensuring proper triple buffering across all present modes (preventing starvation on AMD/Intel/NVIDIA).
      */
     public static int getOptimalImageCount(int presentMode, int minImageCount, int maxImageCount) {
-        int count;
-        if (presentMode == VK_PRESENT_MODE_MAILBOX_KHR || presentMode == VK_PRESENT_MODE_FIFO_KHR || presentMode == VK_PRESENT_MODE_FIFO_RELAXED_KHR) {
-            count = Math.max(3, minImageCount + 1);
-        } else {
-            count = minImageCount + 1;
-        }
-
+        int count = Math.max(3, minImageCount + 1);
         if (maxImageCount > 0 && count > maxImageCount) {
             count = maxImageCount;
         }
-
         return Math.max(count, minImageCount);
     }
 

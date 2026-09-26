@@ -68,6 +68,8 @@ public class VulkanSubsystemsTest {
         assertEquals(SwapchainTuning.VK_PRESENT_MODE_MAILBOX_KHR, SwapchainTuning.parsePresentMode("MAILBOX"));
         assertEquals(SwapchainTuning.VK_PRESENT_MODE_IMMEDIATE_KHR, SwapchainTuning.parsePresentMode("IMMEDIATE"));
         assertEquals(SwapchainTuning.VK_PRESENT_MODE_FIFO_KHR, SwapchainTuning.parsePresentMode("FIFO"));
+        assertEquals(SwapchainTuning.VK_PRESENT_MODE_MAILBOX_KHR, SwapchainTuning.parsePresentMode(null));
+        assertEquals(SwapchainTuning.VK_PRESENT_MODE_MAILBOX_KHR, SwapchainTuning.parsePresentMode("UNKNOWN"));
 
         List<Integer> available = List.of(
                 SwapchainTuning.VK_PRESENT_MODE_FIFO_KHR,
@@ -96,12 +98,12 @@ public class VulkanSubsystemsTest {
         int fallbackRelaxed = SwapchainTuning.selectOptimalPresentMode(SwapchainTuning.VK_PRESENT_MODE_MAILBOX_KHR, relaxedAndImmediate);
         assertEquals(SwapchainTuning.VK_PRESENT_MODE_FIFO_RELAXED_KHR, fallbackRelaxed, "Must fall back to FIFO_RELAXED before IMMEDIATE");
 
-        // Optimal image count prevents AMD Mailbox starvation
+        // Optimal image count prevents AMD Mailbox starvation and ensures at least 3 buffers across all modes
         assertEquals(3, SwapchainTuning.getOptimalImageCount(SwapchainTuning.VK_PRESENT_MODE_MAILBOX_KHR, 1, 0));
         assertEquals(3, SwapchainTuning.getOptimalImageCount(SwapchainTuning.VK_PRESENT_MODE_MAILBOX_KHR, 2, 0));
         assertEquals(4, SwapchainTuning.getOptimalImageCount(SwapchainTuning.VK_PRESENT_MODE_MAILBOX_KHR, 3, 0));
         assertEquals(2, SwapchainTuning.getOptimalImageCount(SwapchainTuning.VK_PRESENT_MODE_MAILBOX_KHR, 2, 2)); // clamped
-        assertEquals(2, SwapchainTuning.getOptimalImageCount(SwapchainTuning.VK_PRESENT_MODE_IMMEDIATE_KHR, 1, 0));
+        assertEquals(3, SwapchainTuning.getOptimalImageCount(SwapchainTuning.VK_PRESENT_MODE_IMMEDIATE_KHR, 1, 0));
     }
 
     @Test

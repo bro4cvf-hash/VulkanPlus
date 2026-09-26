@@ -18,7 +18,7 @@ import org.spongepowered.asm.mixin.injection.Redirect;
 import java.nio.ByteBuffer;
 
 /**
- * Optimizes VulkanMod's AreaBuffer initial SOLID capacity, geometric growth factor (+50% instead of +12.5%),
+ * Optimizes VulkanMod's AreaBuffer initial SOLID and TRANSLUCENT capacity, geometric growth factor (at least 25% or 4MB aligned),
  * and ReBAR direct PCIe BAR upload path to eliminate staging buffer copies and reallocation stalls.
  */
 @Mixin(value = AreaBuffer.class, remap = false)
@@ -36,7 +36,10 @@ public abstract class AreaBufferMixin {
         VulkanPlusConfig cfg = ConfigManager.getConfig();
         if (cfg != null && cfg.enabled && cfg.enableBufferPooling) {
             if (elementCount == 100000) {
-                return cfg.opaqueLeaves ? 131072 : 100000;
+                return 131072;
+            }
+            if (elementCount == 60000) {
+                return 98304;
             }
             if (elementCount == 250000 && cfg.opaqueLeaves) {
                 return 81920;
@@ -56,17 +59,26 @@ public abstract class AreaBufferMixin {
         this.vulkanplus$hasPendingReallocCopy = true;
         VulkanPlusConfig cfg = ConfigManager.getConfig();
         if (cfg != null && cfg.enabled && cfg.enableBufferPooling && this.elementSize > 0) {
-            if (this.size <= 0 || this.size > (Integer.MAX_VALUE >> 1)) {
+            if (this.size <= 0) {
                 return Math.max(defaultIncrement, uploadSize);
             }
-            int step = (this.size < 4 * 1024 * 1024)
-                    ? (this.size >>> 2)
-                    : Math.min(this.size >>> 3, 2 * 1024 * 1024);
-            int elem = this.elementSize;
-            int alignedStep = ((elem & (elem - 1)) == 0)
+            long step = Math.max((long) (this.size >>> 2), 4L * 1024 * 1024);
+            long elem = this.elementSize;
+            long alignedStep = ((elem & (elem - 1)) == 0)
                     ? ((step + elem - 1) & -elem)
                     : (((step + elem - 1) / elem) * elem);
-            return Math.max(Math.max(defaultIncrement, alignedStep), uploadSize);
+            long maxAllowed = (long) Integer.MAX_VALUE - this.size;
+            if (maxAllowed > 0 && alignedStep > maxAllowed) {
+                alignedStep = (maxAllowed / elem) * elem;
+            }
+            long increment = Math.max(Math.max((long) defaultIncrement, alignedStep), (long) uploadSize);
+            if (maxAllowed > 0 && increment > maxAllowed && (long) uploadSize <= maxAllowed) {
+                long alignedUpload = ((elem & (elem - 1)) == 0)
+                        ? (((long) uploadSize + elem - 1) & -elem)
+                        : ((((long) uploadSize + elem - 1) / elem) * elem);
+                increment = (alignedUpload <= maxAllowed) ? alignedUpload : (long) uploadSize;
+            }
+            return (int) increment;
         }
         return Math.max(defaultIncrement, uploadSize);
     }

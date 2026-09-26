@@ -199,6 +199,7 @@ public class MixinTargetAdversarialTest {
         assertBytecodeMethodDescriptor("net.vulkanmod.render.chunk.build.task.TaskDispatcher", "updateSections", "()Z");
         assertBytecodeMethodDescriptor("net.vulkanmod.render.chunk.buffer.AreaBuffer", "reallocate", "(I)Lnet/vulkanmod/render/chunk/buffer/AreaBuffer$Segment;");
         assertBytecodeMethodDescriptor("net.vulkanmod.vulkan.framebuffer.SwapChain", "getPresentMode", "(Ljava/nio/IntBuffer;)I");
+        assertBytecodeMethodDescriptor("net.vulkanmod.vulkan.framebuffer.SwapChain", "createSwapChain", "()V");
         assertBytecodeMethodDescriptor("net.vulkanmod.vulkan.shader.Pipeline", "createPipelineCache", "()J");
         assertBytecodeMethodDescriptor("net.vulkanmod.vulkan.shader.Pipeline", "destroyPipelineCache", "()V");
 
@@ -219,6 +220,7 @@ public class MixinTargetAdversarialTest {
 
         Class<?> swapChainClass = Class.forName("net.vulkanmod.vulkan.framebuffer.SwapChain", false, getClass().getClassLoader());
         assertNotNull(swapChainClass.getDeclaredMethod("getPresentMode", java.nio.IntBuffer.class));
+        assertNotNull(swapChainClass.getDeclaredMethod("createSwapChain"));
 
         Class<?> pipelineClass = Class.forName("net.vulkanmod.vulkan.shader.Pipeline", false, getClass().getClassLoader());
         assertNotNull(pipelineClass.getDeclaredMethod("createPipelineCache"));
@@ -226,7 +228,7 @@ public class MixinTargetAdversarialTest {
     }
 
     @Test
-    @DisplayName("Verify MemoryTypesMixin, TaskDispatcherMixin, and RendererMixin structure and plugin registration")
+    @DisplayName("Verify MemoryTypesMixin, TaskDispatcherMixin, RendererMixin, and SwapChainMixin structure and plugin registration")
     void testPhase2VulkanMixinsStructureAndRegistration() throws Exception {
         List<String> mixinClasses = loadMixinClassesFromConfig("/vulkanplus.mixins.json");
         assertTrue(mixinClasses.contains("net.vulkanplus.mixin.vulkan.MemoryTypesMixin"),
@@ -235,6 +237,8 @@ public class MixinTargetAdversarialTest {
                 "vulkanplus.mixins.json must register vulkan.TaskDispatcherMixin");
         assertTrue(mixinClasses.contains("net.vulkanplus.mixin.vulkan.RendererMixin"),
                 "vulkanplus.mixins.json must register vulkan.RendererMixin");
+        assertTrue(mixinClasses.contains("net.vulkanplus.mixin.vulkan.SwapChainMixin"),
+                "vulkanplus.mixins.json must register vulkan.SwapChainMixin");
 
         assertBytecodeMethodDescriptor("net.vulkanplus.mixin.vulkan.MemoryTypesMixin",
                 "vulkanplus$enableReBarDeviceMappableMemory",
@@ -248,6 +252,9 @@ public class MixinTargetAdversarialTest {
         assertBytecodeMethodDescriptor("net.vulkanplus.mixin.vulkan.RendererMixin",
                 "vulkanplus$onBeginMainRenderPass",
                 "(Lorg/lwjgl/system/MemoryStack;Lorg/spongepowered/asm/mixin/injection/callback/CallbackInfo;)V");
+        assertBytecodeMethodDescriptor("net.vulkanplus.mixin.vulkan.SwapChainMixin",
+                "vulkanplus$tuneRequestedImages",
+                "(I)I");
     }
 
     @Test
@@ -256,6 +263,43 @@ public class MixinTargetAdversarialTest {
         assertBytecodeMethodDescriptor("net.vulkanplus.mixin.exordium.MinecraftClientMixin",
                 "onReloadResources",
                 "(Lorg/spongepowered/asm/mixin/injection/callback/CallbackInfoReturnable;)V");
+    }
+
+    @Test
+    @DisplayName("Verify DescriptorSetsMixin registration and initial pool sizing logic")
+    void testDescriptorSetsMixinRegistrationAndPoolSizing() throws Exception {
+        List<String> mixinClasses = loadMixinClassesFromConfig("/vulkanplus.mixins.json");
+        assertTrue(mixinClasses.contains("net.vulkanplus.mixin.vulkan.DescriptorSetsMixin"),
+                "vulkanplus.mixins.json must register vulkan.DescriptorSetsMixin");
+
+        assertBytecodeMethodDescriptor("net.vulkanplus.mixin.vulkan.DescriptorSetsMixin",
+                "vulkanplus$modifyInitialPoolSize",
+                "(I)I");
+
+        Class<?> descriptorSetsClass = Class.forName("net.vulkanmod.vulkan.shader.DescriptorSets", false, getClass().getClassLoader());
+        assertNotNull(descriptorSetsClass);
+
+        Class<?> mixinClass = Class.forName("net.vulkanplus.mixin.vulkan.DescriptorSetsMixin");
+        Method modifyMethod = mixinClass.getDeclaredMethod("vulkanplus$modifyInitialPoolSize", int.class);
+        modifyMethod.setAccessible(true);
+
+        net.vulkanplus.config.VulkanPlusConfig cfg = net.vulkanplus.config.ConfigManager.getConfig();
+        boolean origEnabled = cfg.enabled;
+        boolean origCaching = cfg.enableDescriptorCaching;
+
+        try {
+            cfg.enabled = true;
+            cfg.enableDescriptorCaching = true;
+            int resultEnabled = (int) modifyMethod.invoke(null, 10);
+            assertEquals(512, resultEnabled, "Pool size must be pre-sized to 512 when descriptor caching is enabled");
+
+            cfg.enableDescriptorCaching = false;
+            int resultDisabled = (int) modifyMethod.invoke(null, 10);
+            assertEquals(10, resultDisabled, "Pool size must retain original 10 when descriptor caching is disabled");
+        } finally {
+            cfg.enabled = origEnabled;
+            cfg.enableDescriptorCaching = origCaching;
+        }
     }
 
     private void assertBytecodeMethodDescriptor(String className, String methodName, String expectedDescriptor) throws Exception {

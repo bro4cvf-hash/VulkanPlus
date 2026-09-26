@@ -6,6 +6,7 @@
   "plugin": "net.vulkanplus.bridge.VulkanModMixinPlugin",
   "mixins": [
     "math.MathHelperMixin",
+    "math.BoxMixin",
     "thread.UtilMixin",
     "leakfix.BiomeMixin",
     "c2me.RegionBasedStorageMixin",
@@ -47,10 +48,12 @@
     "exordium.ChatHudMixin",
     "exordium.MouseMixin",
     "exordium.KeyboardMixin",
+    "render.BufferBuilderMixin",
     "render.GameRendererMixin",
     "render.SpriteContentsMixin",
     "render.BlockRenderLayersMixin",
     "render.ReloadableTextureMixin",
+    "render.RenderSystemLimitFpsMixin",
     "vulkan.VkRenderPassMixin",
     "vulkan.TaskDispatcherMixin",
     "vulkan.AreaBufferMixin",
@@ -59,7 +62,9 @@
     "vulkan.MemoryTypesMixin",
     "vulkan.RendererMixin",
     "vulkan.WorldRendererMixin",
-    "vulkan.VRenderSystemMixin"
+    "vulkan.VRenderSystemMixin",
+    "vulkan.DescriptorSetsMixin",
+    "vulkan.MemoryManagerMixin"
   ],
   "injectors": {
     "defaultRequire": 1

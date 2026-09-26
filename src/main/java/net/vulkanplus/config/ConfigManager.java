@@ -132,6 +132,8 @@ public class ConfigManager {
         sb.append("  \"presentMode\": \"").append(config.presentMode).append("\",\n");
         sb.append("  \"enableFastMath\": ").append(config.enableFastMath).append(",\n");
         sb.append("  \"enableFastRandom\": ").append(config.enableFastRandom).append(",\n");
+        sb.append("  \"enableFastRaycast\": ").append(config.enableFastRaycast).append(",\n");
+        sb.append("  \"enableFastWorldGen\": ").append(config.enableFastWorldGen).append(",\n");
         sb.append("  \"enableMoreCulling\": ").append(config.enableMoreCulling).append(",\n");
         sb.append("  \"enableEntityCulling\": ").append(config.enableEntityCulling).append(",\n");
         sb.append("  \"enableBlockEntityCulling\": ").append(config.enableBlockEntityCulling).append(",\n");
@@ -148,6 +150,9 @@ public class ConfigManager {
         sb.append("  \"renderThreadPriority\": ").append(config.renderThreadPriority).append(",\n");
         sb.append("  \"workerThreadPriority\": ").append(config.workerThreadPriority).append(",\n");
         sb.append("  \"ioThreadPriority\": ").append(config.ioThreadPriority).append(",\n");
+        sb.append("  \"enableMmcss\": ").append(config.enableMmcss).append(",\n");
+        sb.append("  \"mmcssProfile\": \"").append(config.mmcssProfile != null ? config.mmcssProfile : "Games").append("\",\n");
+        sb.append("  \"enableTimerResolution\": ").append(config.enableTimerResolution).append(",\n");
         sb.append("  \"enableFastItemFrames\": ").append(config.enableFastItemFrames).append(",\n");
         sb.append("  \"enableItemFrameBlockOcclusion\": ").append(config.enableItemFrameBlockOcclusion).append(",\n");
         sb.append("  \"itemFrameMaxDistance\": ").append(config.itemFrameMaxDistance).append(",\n");
@@ -221,6 +226,8 @@ public class ConfigManager {
         if (map.containsKey("presentMode")) target.presentMode = map.get("presentMode");
         if (map.containsKey("enableFastMath")) target.enableFastMath = Boolean.parseBoolean(map.get("enableFastMath"));
         if (map.containsKey("enableFastRandom")) target.enableFastRandom = Boolean.parseBoolean(map.get("enableFastRandom"));
+        if (map.containsKey("enableFastRaycast")) target.enableFastRaycast = Boolean.parseBoolean(map.get("enableFastRaycast"));
+        if (map.containsKey("enableFastWorldGen")) target.enableFastWorldGen = Boolean.parseBoolean(map.get("enableFastWorldGen"));
 
         if (map.containsKey("enableMoreCulling")) {
             target.enableMoreCulling = Boolean.parseBoolean(map.get("enableMoreCulling"));
@@ -253,6 +260,9 @@ public class ConfigManager {
         if (map.containsKey("ioThreadPriority")) {
             try { target.ioThreadPriority = Integer.parseInt(map.get("ioThreadPriority")); } catch (NumberFormatException ignored) {}
         }
+        if (map.containsKey("enableMmcss")) target.enableMmcss = Boolean.parseBoolean(map.get("enableMmcss"));
+        if (map.containsKey("mmcssProfile")) target.mmcssProfile = map.get("mmcssProfile");
+        if (map.containsKey("enableTimerResolution")) target.enableTimerResolution = Boolean.parseBoolean(map.get("enableTimerResolution"));
 
         if (map.containsKey("enableFastItemFrames")) target.enableFastItemFrames = Boolean.parseBoolean(map.get("enableFastItemFrames"));
         if (map.containsKey("enableItemFrameBlockOcclusion")) target.enableItemFrameBlockOcclusion = Boolean.parseBoolean(map.get("enableItemFrameBlockOcclusion"));

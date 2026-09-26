@@ -5,14 +5,18 @@ import net.minecraft.util.math.MathHelper;
 import net.vulkanplus.config.ConfigManager;
 import net.vulkanplus.config.VulkanPlusConfig;
 import net.vulkanplus.math.FastMath;
+import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Overwrite;
+import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
-import org.spongepowered.asm.mixin.injection.At;
-import org.spongepowered.asm.mixin.injection.Inject;
-import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 @Mixin(MathHelper.class)
 public class MathHelperMixin {
+
+    @Shadow
+    @Final
+    private static float[] SINE_TABLE;
 
     @Unique
     private static final boolean IS_LITHIUM_LOADED = detectLithium();
@@ -35,17 +39,27 @@ public class MathHelperMixin {
         return cfg != null && cfg.enabled && cfg.enableFastMath;
     }
 
-    @Inject(method = "sin(D)F", at = @At("HEAD"), cancellable = true)
-    private static void vulkanplus$fastSin(double value, CallbackInfoReturnable<Float> cir) {
+    /**
+     * @author VulkanPlus
+     * @reason Direct primitive float trigonometric evaluation with zero heap allocations.
+     */
+    @Overwrite
+    public static float sin(double value) {
         if (isFastMathEnabled()) {
-            cir.setReturnValue(FastMath.sin((float) value));
+            return FastMath.sin((float) value);
         }
+        return SINE_TABLE[(int) ((long) (value * 10430.378350470453) & 0xFFFFL)];
     }
 
-    @Inject(method = "cos(D)F", at = @At("HEAD"), cancellable = true)
-    private static void vulkanplus$fastCos(double value, CallbackInfoReturnable<Float> cir) {
+    /**
+     * @author VulkanPlus
+     * @reason Direct primitive float trigonometric evaluation with zero heap allocations.
+     */
+    @Overwrite
+    public static float cos(double value) {
         if (isFastMathEnabled()) {
-            cir.setReturnValue(FastMath.cos((float) value));
+            return FastMath.cos((float) value);
         }
+        return SINE_TABLE[(int) ((long) (value * 10430.378350470453 + 16384.0) & 0xFFFFL)];
     }
 }

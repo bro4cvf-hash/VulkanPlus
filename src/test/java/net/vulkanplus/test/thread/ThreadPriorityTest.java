@@ -20,8 +20,8 @@ public class ThreadPriorityTest {
         VulkanPlusConfig testConfig = new VulkanPlusConfig();
         testConfig.enabled = true;
         testConfig.enableThreadPriority = true;
-        testConfig.renderThreadPriority = 8;
-        testConfig.workerThreadPriority = 1;
+        testConfig.renderThreadPriority = 7;
+        testConfig.workerThreadPriority = 5;
         testConfig.ioThreadPriority = 3;
         ConfigManager.setConfig(testConfig);
     }
@@ -49,7 +49,7 @@ public class ThreadPriorityTest {
         worker.setPriority(Thread.NORM_PRIORITY);
 
         ThreadPriorityManager.configureWorkerThread(worker);
-        assertEquals(1, worker.getPriority(), "Worker thread should be deprioritized to Thread.MIN_PRIORITY (1)");
+        assertEquals(5, worker.getPriority(), "Worker thread should be Thread.NORM_PRIORITY (5)");
     }
 
     @Test
@@ -106,9 +106,9 @@ public class ThreadPriorityTest {
         try {
             ThreadPriorityManager.sweepAndApplyAll();
 
-            assertEquals(8, renderThread.getPriority(), "Render thread should be elevated to 8");
-            assertEquals(1, workerThread.getPriority(), "Worker thread should be deprioritized to 1");
-            assertEquals(1, builderThread.getPriority(), "VulkanMod Builder-0 thread should be deprioritized to 1");
+            assertEquals(7, renderThread.getPriority(), "Render thread should be elevated to 7");
+            assertEquals(5, workerThread.getPriority(), "Worker thread should be set to 5");
+            assertEquals(5, builderThread.getPriority(), "VulkanMod Builder-0 thread should be set to 5");
             assertEquals(3, ioThread.getPriority(), "IO worker should be set to 3");
 
             // Disable and sweep again
@@ -140,20 +140,20 @@ public class ThreadPriorityTest {
 
         cfg.applyPreset(Preset.FAST);
         assertTrue(cfg.enableThreadPriority);
-        assertEquals(9, cfg.renderThreadPriority);
-        assertEquals(1, cfg.workerThreadPriority);
+        assertEquals(7, cfg.renderThreadPriority);
+        assertEquals(5, cfg.workerThreadPriority);
         assertEquals(2, cfg.ioThreadPriority);
 
         cfg.applyPreset(Preset.BALANCED);
         assertTrue(cfg.enableThreadPriority);
-        assertEquals(8, cfg.renderThreadPriority);
-        assertEquals(2, cfg.workerThreadPriority);
+        assertEquals(7, cfg.renderThreadPriority);
+        assertEquals(5, cfg.workerThreadPriority);
         assertEquals(3, cfg.ioThreadPriority);
 
         cfg.applyPreset(Preset.EXTREME);
         assertTrue(cfg.enableThreadPriority);
-        assertEquals(9, cfg.renderThreadPriority);
-        assertEquals(1, cfg.workerThreadPriority);
+        assertEquals(7, cfg.renderThreadPriority);
+        assertEquals(5, cfg.workerThreadPriority);
         assertEquals(2, cfg.ioThreadPriority);
     }
 

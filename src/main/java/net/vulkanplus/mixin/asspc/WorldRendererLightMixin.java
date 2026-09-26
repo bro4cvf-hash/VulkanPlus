@@ -20,6 +20,8 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 @Mixin(WorldRenderer.class)
 public class WorldRendererLightMixin {
 
+    private static final Integer BOXED_MAX_LIGHT = LightmapTextureManager.MAX_LIGHT_COORDINATE;
+
     @Inject(
             method = "getLightmapCoordinates(Lnet/minecraft/world/BlockRenderView;Lnet/minecraft/util/math/BlockPos;)I",
             at = @At("HEAD"),
@@ -28,7 +30,7 @@ public class WorldRendererLightMixin {
     private static void vulkanplus$fastFullBrightCoordinates(BlockRenderView world, BlockPos pos, CallbackInfoReturnable<Integer> cir) {
         VulkanPlusConfig cfg = ConfigManager.getConfig();
         if (cfg != null && cfg.enabled && cfg.fullBright) {
-            cir.setReturnValue(LightmapTextureManager.MAX_LIGHT_COORDINATE);
+            cir.setReturnValue(BOXED_MAX_LIGHT);
         }
     }
 
@@ -46,7 +48,7 @@ public class WorldRendererLightMixin {
     ) {
         VulkanPlusConfig cfg = ConfigManager.getConfig();
         if (cfg != null && cfg.enabled && cfg.fullBright) {
-            cir.setReturnValue(LightmapTextureManager.MAX_LIGHT_COORDINATE);
+            cir.setReturnValue(BOXED_MAX_LIGHT);
         }
     }
 }

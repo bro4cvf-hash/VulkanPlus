@@ -26,6 +26,8 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 @Mixin(AbstractBlock.AbstractBlockState.class)
 public abstract class FoliageBlockMixin {
 
+    private static final Float BOXED_ONE_FLOAT = 1.0f;
+
     @Shadow
     public abstract Block getBlock();
 
@@ -64,7 +66,7 @@ public abstract class FoliageBlockMixin {
         VulkanPlusConfig config = ConfigManager.getConfig();
         if (config != null && config.enabled) {
             if (config.fullBright || ((config.enableFastFoliage || config.shitFoliage) && FoliageCuller.isFoliageOrPlant(this.getBlock()))) {
-                cir.setReturnValue(1.0f);
+                cir.setReturnValue(BOXED_ONE_FLOAT);
             }
         }
     }

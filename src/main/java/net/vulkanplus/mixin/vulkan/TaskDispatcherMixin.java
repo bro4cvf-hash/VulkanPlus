@@ -1,6 +1,5 @@
 package net.vulkanplus.mixin.vulkan;
 
-import net.vulkanmod.render.chunk.RenderSection;
 import net.vulkanmod.render.chunk.build.task.CompileResult;
 import net.vulkanmod.render.chunk.build.task.TaskDispatcher;
 import net.vulkanplus.config.ConfigManager;
@@ -18,14 +17,13 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 import java.util.Queue;
 
 /**
- * Frame-time chunk upload budgeting, visibility-invariant SectionGraph traversal elimination,
- * and builder thread priority enforcement for VulkanMod's TaskDispatcher.
+ * Frame-time chunk upload budgeting and builder thread priority enforcement for VulkanMod's TaskDispatcher.
  */
 @Mixin(value = TaskDispatcher.class, remap = false)
 public abstract class TaskDispatcherMixin {
 
     @Unique
-    private static final long UPLOAD_BUDGET_NANOS = 400_000L; // 0.4ms strict frame-time budget
+    private static final long UPLOAD_BUDGET_NANOS = 200_000L; // 0.20 ms hard smooth ceiling
 
     @Shadow
     @Final
@@ -48,45 +46,13 @@ public abstract class TaskDispatcherMixin {
             return;
         }
 
-        int backlog = this.compileResults.size();
-        final long budgetNanos;
-        if (backlog > 64) {
-            budgetNanos = 1_500_000L; // 1.5ms under heavy chunk backlog
-        } else if (backlog > 16) {
-            budgetNanos = 800_000L;   // 0.8ms under moderate chunk backlog
-        } else {
-            budgetNanos = UPLOAD_BUDGET_NANOS; // 0.4ms default smooth budget
-        }
-
         final long startTime = System.nanoTime();
-        int uploadedCount = 0;
         boolean graphDirty = false;
 
         do {
-            if (!item.fullUpdate) {
-                // Translucent quad sorting (SortTransparencyTask) only updates the translucent index buffer
-                // and never modifies chunk visibility, emptiness, or block entities.
-                this.doSectionUpdate(item);
-            } else {
-                RenderSection section = item.renderSection;
-                if (section == null) {
-                    this.doSectionUpdate(item);
-                    continue;
-                }
-                long prevVis = section.getVisibility();
-                boolean prevEmpty = section.isCompletelyEmpty();
-                boolean prevBE = section.containsBlockEntities();
-
-                this.doSectionUpdate(item);
-
-                if (section.getVisibility() != prevVis
-                        || section.isCompletelyEmpty() != prevEmpty
-                        || section.containsBlockEntities() != prevBE) {
-                    graphDirty = true;
-                }
-            }
-
-            if ((++uploadedCount & 3) == 0 && (System.nanoTime() - startTime >= budgetNanos)) {
+            this.doSectionUpdate(item);
+            graphDirty = true;
+            if (System.nanoTime() - startTime >= UPLOAD_BUDGET_NANOS) {
                 break;
             }
         } while ((item = this.compileResults.poll()) != null);

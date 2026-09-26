@@ -41,3 +41,6 @@ ehthumbs.db
 
 # Benchmarking & External Port Experiments
 fpstest-port/
+
+# Decompiled temp files
+decompiled_*.txt

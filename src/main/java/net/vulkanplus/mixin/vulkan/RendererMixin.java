@@ -9,6 +9,7 @@ import net.vulkanmod.vulkan.shader.PipelineState;
 import net.vulkanplus.bridge.impl.VulkanModBridgeImpl;
 import net.vulkanplus.config.ConfigManager;
 import net.vulkanplus.config.VulkanPlusConfig;
+import net.vulkanplus.vulkan.PipelinePrewarmer;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.vulkan.VK10;
 import org.lwjgl.vulkan.VkCommandBuffer;
@@ -112,12 +113,15 @@ public abstract class RendererMixin {
         VulkanModBridgeImpl.getStateCache().reset();
     }
 
-    @Inject(method = "beginMainRenderPass(Lorg/lwjgl/system/MemoryStack;)V", at = @At("HEAD"))
+    @Inject(method = "beginMainRenderPass(Lorg/lwjgl/system/MemoryStack;)V", at = @At("RETURN"))
     private void vulkanplus$onBeginMainRenderPass(MemoryStack stack, CallbackInfo ci) {
         this.vulkanplus$lastPipelineState = null;
         VulkanModBridgeImpl.getStateCache().reset();
         this.boundPipelineHandle = 0L;
         this.boundPipeline = null;
+        if (this.boundRenderPass != null) {
+            PipelinePrewarmer.prewarm(this.boundRenderPass);
+        }
     }
 
     @Inject(

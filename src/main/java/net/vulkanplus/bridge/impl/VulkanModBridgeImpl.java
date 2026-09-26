@@ -4,6 +4,7 @@ import net.vulkanplus.VulkanPlusMod;
 import net.vulkanplus.bridge.RenderEngineBridge;
 import net.vulkanplus.config.ConfigManager;
 import net.vulkanplus.config.VulkanPlusConfig;
+import net.vulkanplus.memory.PersistentVmaManager;
 import net.vulkanplus.memory.SlabSubAllocator;
 import net.vulkanplus.memory.TransientRingBuffer;
 import net.vulkanplus.vulkan.PersistentPipelineCache;
@@ -68,7 +69,7 @@ public class VulkanModBridgeImpl implements RenderEngineBridge {
                     && net.vulkanmod.vulkan.memory.MemoryTypes.GPU_MEM != null
                     && net.vulkanmod.vulkan.memory.MemoryTypes.GPU_MEM.vkMemoryHeap != null) {
                 long deviceMb = net.vulkanmod.vulkan.memory.MemoryTypes.GPU_MEM.vkMemoryHeap.size() / (1024L * 1024L);
-                if (deviceMb >= 8192 && net.vulkanmod.Initializer.CONFIG.frameQueueSize < 3) {
+                if (deviceMb >= 2048 && net.vulkanmod.Initializer.CONFIG.frameQueueSize < 3) {
                     net.vulkanmod.Initializer.CONFIG.frameQueueSize = 3;
                     scheduleSwapChainUpdateIfNeeded();
                     VulkanPlusMod.LOGGER.info("[VulkanPlus] Tuned VulkanMod frameQueueSize to 3 for triple-buffered frame pacing ({} MB VRAM).", deviceMb);
@@ -112,6 +113,12 @@ public class VulkanModBridgeImpl implements RenderEngineBridge {
     @Override
     public void onShutdown() {
         VulkanPlusMod.LOGGER.info("[VulkanPlus] VulkanMod bridge shutting down. Releasing allocators.");
+        try {
+            long allocator = net.vulkanmod.vulkan.Vulkan.getAllocator();
+            PersistentVmaManager.cleanupAll(allocator);
+        } catch (Throwable t) {
+            PersistentVmaManager.cleanupAll(0L);
+        }
         if (ringBuffer != null) {
             ringBuffer.destroy();
             this.ringBuffer = null;

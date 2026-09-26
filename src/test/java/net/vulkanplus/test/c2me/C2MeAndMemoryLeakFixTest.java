@@ -82,4 +82,71 @@ public class C2MeAndMemoryLeakFixTest {
         // When both or either are enabled, fog data distances must be at Float.MAX_VALUE or 1,000,000 blocks
         assertTrue(config.noFog || config.noChunkFade);
     }
+
+    @Test
+    @DisplayName("Verify RegionBasedStorageMixin method descriptor and dsync disabling behavior")
+    void testRegionBasedStorageMixinBehavior() throws Exception {
+        Class<?> mixinClass = Class.forName("net.vulkanplus.mixin.c2me.RegionBasedStorageMixin");
+        assertNotNull(mixinClass);
+
+        java.lang.reflect.Method onInitMethod = mixinClass.getDeclaredMethod("onInit",
+                net.minecraft.world.storage.StorageKey.class,
+                java.nio.file.Path.class,
+                boolean.class,
+                org.spongepowered.asm.mixin.injection.callback.CallbackInfo.class);
+        assertNotNull(onInitMethod);
+        onInitMethod.setAccessible(true);
+
+        java.lang.reflect.Field dsyncField = mixinClass.getDeclaredField("dsync");
+        dsyncField.setAccessible(true);
+
+        // Instantiate mixin instance via Objenesis / Unsafe or constructor
+        Object mixinInstance = mixinClass.getDeclaredConstructor().newInstance();
+        dsyncField.set(mixinInstance, true);
+
+        VulkanPlusConfig config = ConfigManager.getConfig();
+        config.enabled = true;
+        config.enableC2MeOptimizations = true;
+
+        onInitMethod.invoke(mixinInstance, null, null, true, null);
+        assertFalse((boolean) dsyncField.get(mixinInstance), "dsync must be forced to false when C2ME optimizations are enabled");
+
+        // When disabled, dsync must not be altered
+        dsyncField.set(mixinInstance, true);
+        config.enableC2MeOptimizations = false;
+        onInitMethod.invoke(mixinInstance, null, null, true, null);
+        assertTrue((boolean) dsyncField.get(mixinInstance), "dsync must remain unchanged when C2ME optimizations are disabled");
+    }
+
+    @Test
+    @DisplayName("Verify NbtCompoundMixin fast path returns Object2ObjectOpenHashMap")
+    void testNbtCompoundMixinFastPath() throws Exception {
+        Class<?> mixinClass = Class.forName("net.vulkanplus.mixin.c2me.NbtCompoundMixin");
+        assertNotNull(mixinClass);
+
+        java.lang.reflect.Method fastMapMethod = mixinClass.getDeclaredMethod("useFastUtilMap", Map.class);
+        fastMapMethod.setAccessible(true);
+
+        VulkanPlusConfig config = ConfigManager.getConfig();
+        config.enabled = true;
+        config.enableC2MeOptimizations = true;
+
+        Map<String, net.minecraft.nbt.NbtElement> originalMap = new java.util.HashMap<>();
+        @SuppressWarnings("unchecked")
+        Map<String, net.minecraft.nbt.NbtElement> resultEnabled =
+                (Map<String, net.minecraft.nbt.NbtElement>) fastMapMethod.invoke(null, originalMap);
+
+        assertNotNull(resultEnabled);
+        assertTrue(resultEnabled instanceof Object2ObjectOpenHashMap, "NbtCompound must use Object2ObjectOpenHashMap on fast path");
+        assertNotSame(originalMap, resultEnabled);
+
+        // When C2ME optimizations are disabled
+        config.enableC2MeOptimizations = false;
+        @SuppressWarnings("unchecked")
+        Map<String, net.minecraft.nbt.NbtElement> resultDisabled =
+                (Map<String, net.minecraft.nbt.NbtElement>) fastMapMethod.invoke(null, originalMap);
+
+        assertSame(originalMap, resultDisabled, "NbtCompound must retain original HashMap when C2ME optimizations are disabled");
+    }
 }
+

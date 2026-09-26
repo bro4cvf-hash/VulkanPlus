@@ -79,7 +79,10 @@ public class ConfigManagerTest {
 
         config.applyPreset(Preset.FAST);
         assertEquals(Preset.FAST, config.activePreset);
-        assertEquals("IMMEDIATE", config.presentMode);
+        assertEquals("MAILBOX", config.presentMode);
+        assertEquals(5, config.workerThreadPriority);
+        assertEquals(7, config.renderThreadPriority);
+        assertFalse(config.enableMmcss);
         assertEquals(0.8, config.cullingDistanceFactor, 1e-5);
         assertTrue(config.opaqueLeaves);
 

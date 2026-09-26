@@ -14,9 +14,15 @@ public final class VulkanSectionVisibility {
 
     private static final double NEAR_CAMERA_SAFETY_DIST_SQ = 64.0; // 8-block radius always visible
 
-    // 1-element per-thread spatial cache: [frame, secX, secY, secZ, visibleFlag]
-    private static final ThreadLocal<long[]> SECTION_CACHE = ThreadLocal.withInitial(
-            () -> new long[]{Long.MIN_VALUE, 0L, 0L, 0L, 1L}
+    private static final int CACHE_SIZE = 32;
+    private static final int CACHE_MASK = 31;
+
+    // 32-entry direct-mapped spatial cache per thread: key stores (frame << 48) | (secX << 32) | (secY << 16) | secZ
+    private static final ThreadLocal<long[]> cachedKeys = ThreadLocal.withInitial(
+            () -> new long[CACHE_SIZE]
+    );
+    private static final ThreadLocal<boolean[]> cachedVisibilities = ThreadLocal.withInitial(
+            () -> new boolean[CACHE_SIZE]
     );
 
     private VulkanSectionVisibility() {
@@ -48,25 +54,11 @@ public final class VulkanSectionVisibility {
                 return true;
             }
 
-            int secX = blockX >> 4;
-            int secY = blockY >> 4;
-            int secZ = blockZ >> 4;
-            long[] cache = SECTION_CACHE.get();
-            if (cache[0] == currentFrame && cache[1] == secX && cache[2] == secY && cache[3] == secZ) {
-                return cache[4] != 0L;
-            }
-
             SectionGrid grid = wr.getSectionGrid();
             if (grid == null) {
                 return true;
             }
-            boolean visible = isSectionVisibleRaw(grid, currentFrame, blockX, blockY, blockZ);
-            cache[0] = currentFrame;
-            cache[1] = secX;
-            cache[2] = secY;
-            cache[3] = secZ;
-            cache[4] = visible ? 1L : 0L;
-            return visible;
+            return isSectionVisible(blockX >> 4, blockY >> 4, blockZ >> 4, currentFrame, grid);
         } catch (Throwable ignored) {
             return true;
         }
@@ -126,46 +118,19 @@ public final class VulkanSectionVisibility {
                 return true;
             }
 
-            long[] cache = SECTION_CACHE.get();
-            if (minSecX == maxSecX && minSecY == maxSecY && minSecZ == maxSecZ) {
-                if (cache[0] == currentFrame && cache[1] == minSecX && cache[2] == minSecY && cache[3] == minSecZ) {
-                    return cache[4] != 0L;
-                }
-                SectionGrid grid = wr.getSectionGrid();
-                if (grid == null) {
-                    return true;
-                }
-                boolean visible = isSectionVisibleRaw(grid, currentFrame, minBx, minBy, minBz);
-                cache[0] = currentFrame;
-                cache[1] = minSecX;
-                cache[2] = minSecY;
-                cache[3] = minSecZ;
-                cache[4] = visible ? 1L : 0L;
-                return visible;
-            }
-
             SectionGrid grid = wr.getSectionGrid();
             if (grid == null) {
                 return true;
             }
 
+            if (minSecX == maxSecX && minSecY == maxSecY && minSecZ == maxSecZ) {
+                return isSectionVisible(minSecX, minSecY, minSecZ, currentFrame, grid);
+            }
+
             for (int sx = minSecX; sx <= maxSecX; sx++) {
-                int bx = sx << 4;
                 for (int sy = minSecY; sy <= maxSecY; sy++) {
-                    int by = sy << 4;
                     for (int sz = minSecZ; sz <= maxSecZ; sz++) {
-                        boolean visible;
-                        if (cache[0] == currentFrame && cache[1] == sx && cache[2] == sy && cache[3] == sz) {
-                            visible = cache[4] != 0L;
-                        } else {
-                            visible = isSectionVisibleRaw(grid, currentFrame, bx, by, sz << 4);
-                            cache[0] = currentFrame;
-                            cache[1] = sx;
-                            cache[2] = sy;
-                            cache[3] = sz;
-                            cache[4] = visible ? 1L : 0L;
-                        }
-                        if (visible) {
+                        if (isSectionVisible(sx, sy, sz, currentFrame, grid)) {
                             return true;
                         }
                     }
@@ -175,6 +140,39 @@ public final class VulkanSectionVisibility {
         } catch (Throwable ignored) {
             return true;
         }
+    }
+
+    /**
+     * Checks if a 16x16x16 chunk section is visible in the current frame using a 32-entry direct-mapped spatial cache.
+     * Thread-safe and zero allocation.
+     */
+    public static boolean isSectionVisible(int secX, int secY, int secZ, short currentFrame, SectionGrid grid) {
+        if (currentFrame == 0 || grid == null) {
+            return true;
+        }
+
+        int hash = ((secX * 31 + secY) * 17 + secZ) & 31;
+        long key = ((long) currentFrame << 48) | ((secX & 0xFFFFL) << 32) | ((secY & 0xFFFFL) << 16) | (secZ & 0xFFFFL);
+
+        long[] keys = cachedKeys.get();
+        boolean[] visibilities = cachedVisibilities.get();
+
+        if (keys[hash] == key) {
+            return visibilities[hash];
+        }
+
+        try {
+            boolean visible = isSectionVisibleRaw(grid, currentFrame, secX << 4, secY << 4, secZ << 4);
+            keys[hash] = key;
+            visibilities[hash] = visible;
+            return visible;
+        } catch (Throwable ignored) {
+            return true;
+        }
+    }
+
+    public static boolean isSectionVisible(int secX, int secY, int secZ, int currentFrame, SectionGrid grid) {
+        return isSectionVisible(secX, secY, secZ, (short) currentFrame, grid);
     }
 
     private static boolean isSectionVisibleRaw(SectionGrid grid, short currentFrame, int blockX, int blockY, int blockZ) {

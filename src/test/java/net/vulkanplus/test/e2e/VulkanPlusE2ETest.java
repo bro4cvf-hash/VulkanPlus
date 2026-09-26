@@ -115,7 +115,10 @@ public class VulkanPlusE2ETest {
 
         config.applyPreset(Preset.FAST);
         assertEquals(0.8, config.cullingDistanceFactor, 1e-5);
-        assertEquals("IMMEDIATE", config.presentMode);
+        assertEquals("MAILBOX", config.presentMode);
+        assertEquals(5, config.workerThreadPriority);
+        assertEquals(7, config.renderThreadPriority);
+        assertFalse(config.enableMmcss);
 
         config.applyPreset(Preset.EXTREME);
         assertEquals(0.6, config.cullingDistanceFactor, 1e-5);

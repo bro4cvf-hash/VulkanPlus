@@ -21,11 +21,6 @@ public class EntityRenderManagerMixin {
         net.vulkanplus.config.VulkanPlusConfig cfg = ConfigManager.getConfig();
         if (cfg == null || !cfg.enabled || !cfg.enableEntityCulling || entity == null) return;
 
-        // Never cull dropped items or experience orbs in the early pass; let vanilla's renderer handle them safely
-        if (entity instanceof ItemEntity || entity instanceof ExperienceOrbEntity) {
-            return;
-        }
-
         Box box = entity.getBoundingBox();
         if (box == null) {
             return;
@@ -37,6 +32,19 @@ public class EntityRenderManagerMixin {
         }
 
         net.vulkanplus.render.FrustumCuller frustumCuller = RenderOptimizer.getFrustumCuller();
+
+        // Dropped items and experience orbs: cull if in an occluded chunk section (e.g. underground mob farm or hopper room behind a wall),
+        // then return early to let vanilla's renderer handle them safely without aggressive frustum culling
+        if (entity instanceof ItemEntity || entity instanceof ExperienceOrbEntity) {
+            if (!net.vulkanplus.culling.VulkanSectionVisibility.isAabbVisible(
+                    box.minX, box.minY, box.minZ,
+                    box.maxX, box.maxY, box.maxZ,
+                    frustumCuller.getCameraX(), frustumCuller.getCameraY(), frustumCuller.getCameraZ())) {
+                frustumCuller.recordOccludedEntity();
+                cir.setReturnValue(false);
+            }
+            return;
+        }
 
         // Sub-pixel distance culling for tiny ambient entities
         if (entity instanceof net.minecraft.entity.passive.BatEntity

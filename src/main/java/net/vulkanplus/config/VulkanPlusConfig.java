@@ -15,6 +15,8 @@ public class VulkanPlusConfig {
 
     public boolean enableFastMath = true;
     public boolean enableFastRandom = true;
+    public boolean enableFastRaycast = true;
+    public boolean enableFastWorldGen = true;
 
     public boolean enableMoreCulling = true;
     public boolean enableEntityCulling = true;
@@ -30,9 +32,12 @@ public class VulkanPlusConfig {
     public int foliageDensity = 100;
 
     public boolean enableThreadPriority = true;
-    public int renderThreadPriority = 8;
-    public int workerThreadPriority = 1;
+    public int renderThreadPriority = 7;
+    public int workerThreadPriority = 5;
     public int ioThreadPriority = 3;
+    public boolean enableMmcss = false; // Prevents Windows MMCSS quota throttling stalls
+    public String mmcssProfile = "Games";
+    public boolean enableTimerResolution = true;
 
     public boolean enableFastItemFrames = true;
     public boolean enableItemFrameBlockOcclusion = true;
@@ -107,9 +112,11 @@ public class VulkanPlusConfig {
                 this.enablePsoCache = true;
                 this.enableReverseZ = true;
                 this.enableSwapchainTuning = true;
-                this.presentMode = "IMMEDIATE";
+                this.presentMode = "MAILBOX"; // was IMMEDIATE
                 this.enableFastMath = true;
                 this.enableFastRandom = true;
+                this.enableFastRaycast = true;
+                this.enableFastWorldGen = true;
                 this.enableMoreCulling = true;
                 this.enableEntityCulling = true;
                 this.enableBlockEntityCulling = true;
@@ -123,9 +130,12 @@ public class VulkanPlusConfig {
                 this.enableFastFoliage = true;
                 this.foliageDensity = 100;
                 this.enableThreadPriority = true;
-                this.renderThreadPriority = 9;
-                this.workerThreadPriority = 1;
+                this.renderThreadPriority = 7;
+                this.workerThreadPriority = 5;
                 this.ioThreadPriority = 2;
+                this.enableMmcss = false; // was true (caused 29.4ms MMCSS quota throttle)
+                this.mmcssProfile = "Games";
+                this.enableTimerResolution = true;
                 this.enableFastItemFrames = true;
                 this.enableItemFrameBlockOcclusion = true;
                 this.itemFrameMaxDistance = 48.0;
@@ -157,6 +167,8 @@ public class VulkanPlusConfig {
                 this.presentMode = "MAILBOX";
                 this.enableFastMath = true;
                 this.enableFastRandom = true;
+                this.enableFastRaycast = true;
+                this.enableFastWorldGen = true;
                 this.enableMoreCulling = true;
                 this.enableEntityCulling = true;
                 this.enableBlockEntityCulling = true;
@@ -170,9 +182,12 @@ public class VulkanPlusConfig {
                 this.enableFastFoliage = true;
                 this.foliageDensity = 100;
                 this.enableThreadPriority = true;
-                this.renderThreadPriority = 8;
-                this.workerThreadPriority = 2;
+                this.renderThreadPriority = 7;
+                this.workerThreadPriority = 5;
                 this.ioThreadPriority = 3;
+                this.enableMmcss = false;
+                this.mmcssProfile = "Games";
+                this.enableTimerResolution = true;
                 this.enableFastItemFrames = true;
                 this.enableItemFrameBlockOcclusion = true;
                 this.itemFrameMaxDistance = 64.0;
@@ -204,6 +219,8 @@ public class VulkanPlusConfig {
                 this.presentMode = "MAILBOX";
                 this.enableFastMath = true;
                 this.enableFastRandom = true;
+                this.enableFastRaycast = true;
+                this.enableFastWorldGen = true;
                 this.enableMoreCulling = true;
                 this.enableEntityCulling = true;
                 this.enableBlockEntityCulling = true;
@@ -217,9 +234,12 @@ public class VulkanPlusConfig {
                 this.enableFastFoliage = true;
                 this.foliageDensity = 100;
                 this.enableThreadPriority = true;
-                this.renderThreadPriority = 9;
-                this.workerThreadPriority = 1;
+                this.renderThreadPriority = 7;
+                this.workerThreadPriority = 5;
                 this.ioThreadPriority = 2;
+                this.enableMmcss = false;
+                this.mmcssProfile = "Games";
+                this.enableTimerResolution = true;
                 this.enableFastItemFrames = true;
                 this.enableItemFrameBlockOcclusion = true;
                 this.itemFrameMaxDistance = 96.0;
@@ -260,6 +280,8 @@ public class VulkanPlusConfig {
                 && (this.presentMode == null ? sample.presentMode == null : this.presentMode.equals(sample.presentMode))
                 && this.enableFastMath == sample.enableFastMath
                 && this.enableFastRandom == sample.enableFastRandom
+                && this.enableFastRaycast == sample.enableFastRaycast
+                && this.enableFastWorldGen == sample.enableFastWorldGen
                 && this.enableMoreCulling == sample.enableMoreCulling
                 && this.enableEntityCulling == sample.enableEntityCulling
                 && this.enableBlockEntityCulling == sample.enableBlockEntityCulling
@@ -273,6 +295,11 @@ public class VulkanPlusConfig {
                 && this.enableFastFoliage == sample.enableFastFoliage
                 && this.foliageDensity == sample.foliageDensity
                 && this.enableThreadPriority == sample.enableThreadPriority
+                && this.renderThreadPriority == sample.renderThreadPriority
+                && this.workerThreadPriority == sample.workerThreadPriority
+                && this.enableMmcss == sample.enableMmcss
+                && (this.mmcssProfile == null ? sample.mmcssProfile == null : this.mmcssProfile.equals(sample.mmcssProfile))
+                && this.enableTimerResolution == sample.enableTimerResolution
                 && this.chestProtection == sample.chestProtection
                 && this.hudTargetFps == sample.hudTargetFps
                 && this.enableScreenPacing == sample.enableScreenPacing
@@ -309,6 +336,8 @@ public class VulkanPlusConfig {
         this.presentMode = other.presentMode;
         this.enableFastMath = other.enableFastMath;
         this.enableFastRandom = other.enableFastRandom;
+        this.enableFastRaycast = other.enableFastRaycast;
+        this.enableFastWorldGen = other.enableFastWorldGen;
         this.enableMoreCulling = other.enableMoreCulling;
         this.enableEntityCulling = other.enableEntityCulling;
         this.enableBlockEntityCulling = other.enableBlockEntityCulling;
@@ -325,6 +354,9 @@ public class VulkanPlusConfig {
         this.renderThreadPriority = other.renderThreadPriority;
         this.workerThreadPriority = other.workerThreadPriority;
         this.ioThreadPriority = other.ioThreadPriority;
+        this.enableMmcss = other.enableMmcss;
+        this.mmcssProfile = other.mmcssProfile;
+        this.enableTimerResolution = other.enableTimerResolution;
         this.enableFastItemFrames = other.enableFastItemFrames;
         this.enableItemFrameBlockOcclusion = other.enableItemFrameBlockOcclusion;
         this.itemFrameMaxDistance = other.itemFrameMaxDistance;
