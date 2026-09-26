@@ -28,6 +28,7 @@ public class VulkanPlusMod implements ModInitializer, ClientModInitializer {
     private static volatile KeyBinding toggleHudKey;
     private static volatile KeyBinding toggleVulkanPlusKey;
     private static volatile KeyBinding toggleFpsKey;
+    private static boolean overlayRenderedThisFrame = false;
 
     private static final Object INIT_LOCK = new Object();
     private static volatile boolean commonInitialized = false;
@@ -35,6 +36,49 @@ public class VulkanPlusMod implements ModInitializer, ClientModInitializer {
 
     public static DiagnosticHud getDiagnosticHud() {
         return DIAGNOSTIC_HUD;
+    }
+
+    public static void beginHudFrame() {
+        overlayRenderedThisFrame = false;
+        DIAGNOSTIC_HUD.onFrameTick();
+    }
+
+    public static void renderDiagnosticsAndFpsOverlay(net.minecraft.client.gui.DrawContext drawContext) {
+        if (overlayRenderedThisFrame || drawContext == null) {
+            return;
+        }
+        if (net.vulkanplus.exordium.ExordiumManager.getInstance().isCapturing()) {
+            // Skip baking Show FPS / F8 Diagnostics HUD into Exordium's cached HUD snapshot
+            // so it renders uncached at full native framerate on every frame without flickering.
+            return;
+        }
+
+        net.vulkanplus.config.VulkanPlusConfig cfg = ConfigManager.getConfig();
+        MinecraftClient client = MinecraftClient.getInstance();
+        if (client == null || client.textRenderer == null) return;
+        if (client.options != null && client.options.hudHidden) return;
+
+        overlayRenderedThisFrame = true;
+
+        if (cfg.showDiagnosticsHud) {
+            DIAGNOSTIC_HUD.onHudRenderPass();
+            String[] lines = DIAGNOSTIC_HUD.getDiagnosticsLines();
+            int y = 5;
+            for (int i = 0, n = lines.length; i < n; i++) {
+                drawContext.drawTextWithShadow(client.textRenderer, lines[i], 5, y, 0xFF00FF88);
+                y += 11;
+            }
+        } else if (cfg.showFps) {
+            boolean f3Enabled = client.debugHudEntryList != null && client.debugHudEntryList.isF3Enabled();
+            if (!f3Enabled) {
+                DIAGNOSTIC_HUD.onHudRenderPass();
+                int fps = Math.max(client.getCurrentFps(), Math.round(DIAGNOSTIC_HUD.getCurrentFps()));
+                if (fps <= 0) {
+                    fps = 1;
+                }
+                drawContext.drawTextWithShadow(client.textRenderer, DIAGNOSTIC_HUD.getFormattedFpsOverlay(fps), 5, 5, 0xFFFFFFFF);
+            }
+        }
     }
 
     @Override
@@ -52,9 +96,16 @@ public class VulkanPlusMod implements ModInitializer, ClientModInitializer {
     public void onInitializeClient() {
         synchronized (INIT_LOCK) {
             if (!clientInitialized) {
+                ConfigManager.load();
                 LOGGER.info("[{}] Initializing client optimizations and probing render backend...", MOD_NAME);
                 RenderEngineBridge bridge = VulkanDetector.getBridge();
                 bridge.onRenderInit();
+
+                try {
+                    net.vulkanplus.exordium.ExordiumManager.getInstance().init();
+                    net.vulkanplus.exordium.ExordiumManager.getInstance().markDirty();
+                } catch (Throwable ignored) {
+                }
 
                 try {
                     ThreadPriorityManager.applyRenderThreadPriority();
@@ -102,9 +153,11 @@ public class VulkanPlusMod implements ModInitializer, ClientModInitializer {
                     ClientTickEvents.END_CLIENT_TICK.register(client -> {
                         if (toggleVulkanPlusKey != null) {
                             while (toggleVulkanPlusKey.wasPressed()) {
-                                boolean newState = !ConfigManager.getConfig().enabled;
-                                ConfigManager.getConfig().enabled = newState;
-                                ConfigManager.save();
+                                net.vulkanplus.config.VulkanPlusConfig prev = ConfigManager.getConfig().copy();
+                                net.vulkanplus.config.VulkanPlusConfig updated = prev.copy();
+                                boolean newState = !prev.enabled;
+                                updated.enabled = newState;
+                                net.vulkanplus.ui.VulkanPlusConfigScreen.applyConfigChanges(prev, updated, client);
 
                                 if (client.player != null) {
                                     Text msg = Text.literal("[Vulkan Plus] ")
@@ -121,6 +174,7 @@ public class VulkanPlusMod implements ModInitializer, ClientModInitializer {
                             while (toggleHudKey.wasPressed()) {
                                 ConfigManager.getConfig().showDiagnosticsHud = !ConfigManager.getConfig().showDiagnosticsHud;
                                 ConfigManager.save();
+                                net.vulkanplus.exordium.ExordiumManager.getInstance().markDirty();
                             }
                         }
 
@@ -128,42 +182,26 @@ public class VulkanPlusMod implements ModInitializer, ClientModInitializer {
                             while (toggleFpsKey.wasPressed()) {
                                 ConfigManager.getConfig().showFps = !ConfigManager.getConfig().showFps;
                                 ConfigManager.save();
+                                net.vulkanplus.exordium.ExordiumManager.getInstance().markDirty();
                             }
                         }
                     });
 
                     HudRenderCallback.EVENT.register((drawContext, renderTickCounter) -> {
-                        net.vulkanplus.config.VulkanPlusConfig cfg = ConfigManager.getConfig();
-                        MinecraftClient client = MinecraftClient.getInstance();
-                        if (client == null || client.textRenderer == null) return;
-                        if (client.options != null && client.options.hudHidden) return;
-
-                        if (cfg.showDiagnosticsHud) {
-                            DIAGNOSTIC_HUD.onFrame();
-                            String[] lines = DIAGNOSTIC_HUD.getDiagnosticsLines();
-                            int y = 5;
-                            for (String line : lines) {
-                                drawContext.drawTextWithShadow(client.textRenderer, line, 5, y, 0xFF00FF88);
-                                y += 11;
-                            }
-                        } else if (cfg.showFps) {
-                            boolean f3Enabled = client.debugHudEntryList != null && client.debugHudEntryList.isF3Enabled();
-                            if (!f3Enabled) {
-                                int fps = client.getCurrentFps();
-                                if (fps <= 0) {
-                                    DIAGNOSTIC_HUD.onFrame();
-                                    fps = Math.max(1, Math.round(DIAGNOSTIC_HUD.getCurrentFps()));
-                                }
-                                drawContext.drawTextWithShadow(client.textRenderer, fps + " FPS", 5, 5, 0xFFFFFFFF);
-                            }
-                        }
+                        renderDiagnosticsAndFpsOverlay(drawContext);
                     });
                 } catch (Throwable t) {
                     LOGGER.debug("[{}] Client event registration skipped or running in headless/test mode: {}", MOD_NAME, t.getMessage());
                 }
 
                 try {
-                    Runtime.getRuntime().addShutdownHook(new Thread(bridge::onShutdown, "VulkanPlus-Shutdown"));
+                    Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+                        try {
+                            ConfigManager.save();
+                        } catch (Throwable ignored) {
+                        }
+                        bridge.onShutdown();
+                    }, "VulkanPlus-Shutdown"));
                 } catch (Throwable ignored) {
                 }
 

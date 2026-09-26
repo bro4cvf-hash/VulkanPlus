@@ -148,6 +148,8 @@ public class ConfigManagerTest {
         cfg.noBlockEntityAnimations = true;
         cfg.noChunkFade = true;
         cfg.fastChest = true;
+        cfg.shitFoliage = true;
+        cfg.fullBright = true;
         cfg.enableC2MeOptimizations = true;
         cfg.enableMemoryLeakFix = true;
 
@@ -167,8 +169,30 @@ public class ConfigManagerTest {
         assertTrue(parsed.noBlockEntityAnimations);
         assertTrue(parsed.noChunkFade);
         assertTrue(parsed.fastChest);
+        assertTrue(parsed.shitFoliage);
+        assertTrue(parsed.fullBright);
         assertTrue(parsed.enableC2MeOptimizations);
         assertTrue(parsed.enableMemoryLeakFix);
         assertTrue(parsed.isAssPcActive());
+    }
+
+    @Test
+    @DisplayName("Master Toggle application updates and persists enabled state properly")
+    public void testMasterToggleApplication() {
+        VulkanPlusConfig prev = ConfigManager.getConfig().copy();
+        VulkanPlusConfig updated = prev.copy();
+        updated.enabled = false;
+        updated.opaqueLeaves = true;
+
+        net.vulkanplus.ui.VulkanPlusConfigScreen.applyConfigChanges(prev, updated, null);
+
+        VulkanPlusConfig current = ConfigManager.getConfig();
+        assertFalse(current.enabled);
+        assertTrue(current.opaqueLeaves);
+
+        // Turn back on
+        updated.enabled = true;
+        net.vulkanplus.ui.VulkanPlusConfigScreen.applyConfigChanges(current, updated, null);
+        assertTrue(ConfigManager.getConfig().enabled);
     }
 }

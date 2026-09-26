@@ -68,12 +68,7 @@ public class VulkanModGuiIntegration {
                 },
                 getter
         );
-        option.setOnChange(() -> {
-            boolean val = option.getNewValue();
-            setter.accept(val);
-            ConfigManager.save();
-            if (extraOnChange != null) extraOnChange.run();
-        });
+        option.setOnChange(option::apply);
         if (tooltipKey != null) {
             option.setTooltip(val -> Text.translatable(tooltipKey));
         }
@@ -85,6 +80,14 @@ public class VulkanModGuiIntegration {
 
     public static List<OptionPage> buildOptionPages() {
         VulkanPlusConfig config = ConfigManager.getConfig();
+
+        Runnable exordiumSync = () -> {
+            if (!config.enabled || !config.enableExordium) {
+                net.vulkanplus.exordium.ExordiumManager.getInstance().cleanup();
+            } else {
+                net.vulkanplus.exordium.ExordiumManager.getInstance().markDirty();
+            }
+        };
 
         Runnable leavesReload = () -> {
             MinecraftClient client = MinecraftClient.getInstance();
@@ -108,12 +111,18 @@ public class VulkanModGuiIntegration {
             String oldPresentMode = config.presentMode;
             config.applyPreset(preset);
             ConfigManager.save();
+            exordiumSync.run();
             ThreadPriorityManager.sweepAndApplyAll();
             if (!java.util.Objects.equals(oldPresentMode, config.presentMode)) {
                 VulkanModBridgeImpl.scheduleSwapChainUpdateIfNeeded();
             }
             if (oldOpaqueLeaves != config.opaqueLeaves) {
                 leavesReload.run();
+            } else {
+                MinecraftClient client = MinecraftClient.getInstance();
+                if (client != null && client.worldRenderer != null) {
+                    client.worldRenderer.reload();
+                }
             }
         };
 
@@ -125,16 +134,16 @@ public class VulkanModGuiIntegration {
         );
         presetOption.setTranslator(preset -> Text.literal(preset.getDisplayName()));
         presetOption.setTooltip(preset -> Text.literal(preset.getDescription()));
-        presetOption.setOnChange(() -> applyPresetWithSideEffects.accept(presetOption.getNewValue()));
+        presetOption.setOnChange(presetOption::apply);
 
         Option<?>[] generalOptions = new Option<?>[]{
                 createSwitch("vulkanplus.options.enabled", val -> config.enabled = val, () -> config.enabled,
-                        "vulkanplus.options.enabled.tooltip", null, null),
+                        "vulkanplus.options.enabled.tooltip", null, exordiumSync),
                 presetOption,
                 createSwitch("vulkanplus.options.showFps", val -> ConfigManager.getConfig().showFps = val, () -> ConfigManager.getConfig().showFps,
-                        "vulkanplus.options.showFps.tooltip", null, null),
+                        "vulkanplus.options.showFps.tooltip", null, exordiumSync),
                 createSwitch("vulkanplus.options.showDiagnosticsHud", val -> config.showDiagnosticsHud = val, () -> config.showDiagnosticsHud,
-                        "vulkanplus.options.showDiagnosticsHud.tooltip", null, null)
+                        "vulkanplus.options.showDiagnosticsHud.tooltip", null, exordiumSync)
         };
         OptionBlock generalBlock = new OptionBlock(Text.translatable("vulkanplus.section.general").getString(), generalOptions);
 
@@ -159,11 +168,7 @@ public class VulkanModGuiIntegration {
         foliageDensityOption.setTranslator(density -> Text.literal(density + "%"));
         foliageDensityOption.setTooltip(density -> Text.translatable("vulkanplus.options.foliageDensity.tooltip"));
         foliageDensityOption.setImpact(PerformanceImpact.HIGH);
-        foliageDensityOption.setOnChange(() -> {
-            config.foliageDensity = foliageDensityOption.getNewValue();
-            ConfigManager.save();
-            worldReload.run();
-        });
+        foliageDensityOption.setOnChange(foliageDensityOption::apply);
 
         Option<?>[] foliageOptions = new Option<?>[]{
                 createSwitch("vulkanplus.options.opaqueLeaves", val -> config.opaqueLeaves = val, () -> config.opaqueLeaves,
@@ -189,11 +194,7 @@ public class VulkanModGuiIntegration {
         );
         presentModeOption.setTranslator(Text::literal);
         presentModeOption.setTooltip(mode -> Text.translatable("vulkanplus.options.presentMode.tooltip"));
-        presentModeOption.setOnChange(() -> {
-            config.presentMode = presentModeOption.getNewValue();
-            ConfigManager.save();
-            VulkanModBridgeImpl.scheduleSwapChainUpdateIfNeeded();
-        });
+        presentModeOption.setOnChange(presentModeOption::apply);
 
         Option<?>[] vulkanOptions = new Option<?>[]{
                 createSwitch("vulkanplus.options.bufferPooling", val -> config.enableBufferPooling = val, () -> config.enableBufferPooling,
@@ -298,15 +299,13 @@ public class VulkanModGuiIntegration {
                 fps -> {
                     config.hudTargetFps = fps;
                     ConfigManager.save();
+                    exordiumSync.run();
                 },
                 () -> config.hudTargetFps
         );
         hudFpsOption.setTranslator(fps -> Text.literal(fps + " FPS"));
         hudFpsOption.setTooltip(fps -> Text.translatable("vulkanplus.options.hudTargetFps.tooltip"));
-        hudFpsOption.setOnChange(() -> {
-            config.hudTargetFps = hudFpsOption.getNewValue();
-            ConfigManager.save();
-        });
+        hudFpsOption.setOnChange(hudFpsOption::apply);
 
         Integer[] screenFpsOptions = new Integer[]{30, 60};
         CyclingOption<Integer> screenFpsOption = new CyclingOption<>(
@@ -315,33 +314,31 @@ public class VulkanModGuiIntegration {
                 fps -> {
                     config.screenTargetFps = fps;
                     ConfigManager.save();
+                    exordiumSync.run();
                 },
                 () -> config.screenTargetFps
         );
         screenFpsOption.setTranslator(fps -> Text.literal(fps + " FPS"));
         screenFpsOption.setTooltip(fps -> Text.translatable("vulkanplus.options.screenTargetFps.tooltip"));
-        screenFpsOption.setOnChange(() -> {
-            config.screenTargetFps = screenFpsOption.getNewValue();
-            ConfigManager.save();
-        });
+        screenFpsOption.setOnChange(screenFpsOption::apply);
 
         Option<?>[] exordiumOptions = new Option<?>[]{
                 createSwitch("vulkanplus.options.enableExordium", val -> config.enableExordium = val, () -> config.enableExordium,
-                        "vulkanplus.options.enableExordium.tooltip", PerformanceImpact.HIGH, null),
+                        "vulkanplus.options.enableExordium.tooltip", PerformanceImpact.HIGH, exordiumSync),
                 hudFpsOption,
                 createSwitch("vulkanplus.options.enableScreenPacing", val -> config.enableScreenPacing = val, () -> config.enableScreenPacing,
-                        "vulkanplus.options.enableScreenPacing.tooltip", PerformanceImpact.MEDIUM, null),
+                        "vulkanplus.options.enableScreenPacing.tooltip", PerformanceImpact.MEDIUM, exordiumSync),
                 screenFpsOption,
                 createSwitch("vulkanplus.options.instantInputResponsiveness", val -> config.instantInputResponsiveness = val, () -> config.instantInputResponsiveness,
-                        "vulkanplus.options.instantInputResponsiveness.tooltip", PerformanceImpact.LOW, null),
+                        "vulkanplus.options.instantInputResponsiveness.tooltip", PerformanceImpact.LOW, exordiumSync),
                 createSwitch("vulkanplus.options.dynamicHudUpdates", val -> config.dynamicHudUpdates = val, () -> config.dynamicHudUpdates,
-                        "vulkanplus.options.dynamicHudUpdates.tooltip", PerformanceImpact.LOW, null),
+                        "vulkanplus.options.dynamicHudUpdates.tooltip", PerformanceImpact.LOW, exordiumSync),
                 createSwitch("vulkanplus.options.separateCrosshair", val -> config.separateCrosshair = val, () -> config.separateCrosshair,
-                        "vulkanplus.options.separateCrosshair.tooltip", PerformanceImpact.LOW, null),
+                        "vulkanplus.options.separateCrosshair.tooltip", PerformanceImpact.LOW, exordiumSync),
                 createSwitch("vulkanplus.options.bypassInDebugScreen", val -> config.bypassInDebugScreen = val, () -> config.bypassInDebugScreen,
-                        "vulkanplus.options.bypassInDebugScreen.tooltip", PerformanceImpact.LOW, null),
+                        "vulkanplus.options.bypassInDebugScreen.tooltip", PerformanceImpact.LOW, exordiumSync),
                 createSwitch("vulkanplus.options.fastFadeTransitions", val -> config.fastFadeTransitions = val, () -> config.fastFadeTransitions,
-                        "vulkanplus.options.fastFadeTransitions.tooltip", PerformanceImpact.LOW, null)
+                        "vulkanplus.options.fastFadeTransitions.tooltip", PerformanceImpact.LOW, exordiumSync)
         };
         OptionBlock exordiumBlock = new OptionBlock(Text.translatable("vulkanplus.section.exordium").getString(), exordiumOptions);
 

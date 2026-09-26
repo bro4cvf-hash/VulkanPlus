@@ -14,6 +14,8 @@ import org.spongepowered.asm.mixin.injection.Redirect;
 @Mixin(targets = "net.vulkanmod.render.chunk.WorldRenderer", remap = false)
 public class WorldRendererMixin {
 
+    private static final Double ZERO_DOUBLE = Double.valueOf(0.0d);
+
     @Redirect(
             method = "renderSectionLayer",
             at = @At(
@@ -26,8 +28,8 @@ public class WorldRendererMixin {
     private Object onGetChunkFadeValue(SimpleOption<?> option) {
         VulkanPlusConfig cfg = ConfigManager.getConfig();
         if (cfg != null && cfg.enabled && cfg.noChunkFade) {
-            return 0.0d;
+            return ZERO_DOUBLE;
         }
-        return option.getValue();
+        return option != null ? option.getValue() : ZERO_DOUBLE;
     }
 }

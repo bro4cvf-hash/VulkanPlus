@@ -13,6 +13,9 @@ public class EntityModelMixin {
 
     @Inject(method = "setAngles(Ljava/lang/Object;)V", at = @At("HEAD"), cancellable = true)
     private void onSetAngles(Object state, CallbackInfo ci) {
+        if (state == null) {
+            return;
+        }
         VulkanPlusConfig cfg = ConfigManager.getConfig();
         if (cfg != null && cfg.enabled && cfg.noMobAnimations) {
             ((Model) (Object) this).resetTransforms();

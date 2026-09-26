@@ -28,51 +28,80 @@ public class BlockEntityRenderManagerMixin {
             ModelCommandRenderer.CrumblingOverlayCommand crumblingOverlayCommand,
             CallbackInfoReturnable<S> cir
     ) {
-        VulkanPlusConfig config = ConfigManager.getConfig();
-        if (!config.enabled || !config.enableBlockEntityCulling) return;
+        try {
+            if (blockEntity == null) return;
+            VulkanPlusConfig config = ConfigManager.getConfig();
+            if (config == null || !config.enabled || !config.enableBlockEntityCulling) return;
 
-        // Never cull beacons or portal gateways whose beams extend far into the sky
-        BlockEntityType<?> type = blockEntity.getType();
-        if (config.fastChest && (type == BlockEntityType.CHEST || type == BlockEntityType.ENDER_CHEST || type == BlockEntityType.TRAPPED_CHEST)) {
-            cir.setReturnValue(null);
-            return;
-        }
-        if (BlockEntityOcclusionCuller.isProtectedType(type)) {
-            return;
-        }
+            // Never cull beacons or portal gateways whose beams extend far into the sky
+            BlockEntityType<?> type = blockEntity.getType();
+            if (BlockEntityOcclusionCuller.isProtectedType(type)) {
+                return;
+            }
 
-        BlockPos pos = blockEntity.getPos();
-        // Give chests and large tile entities a generous margin to prevent pop-in
-        double minX = pos.getX() - 0.5;
-        double minY = pos.getY() - 0.5;
-        double minZ = pos.getZ() - 0.5;
-        double maxX = pos.getX() + 1.5;
-        double maxY = pos.getY() + 1.5;
-        double maxZ = pos.getZ() + 1.5;
+            BlockPos pos = blockEntity.getPos();
+            if (pos == null) return;
 
-        FrustumCuller frustumCuller = RenderOptimizer.getFrustumCuller();
-        if (!frustumCuller.isAabbVisible(minX, minY, minZ, maxX, maxY, maxZ)) {
-            cir.setReturnValue(null);
-            return;
-        }
+            FrustumCuller frustumCuller = RenderOptimizer.getFrustumCuller();
+            if (frustumCuller == null) return;
 
-        if (config.enableBlockEntityOcclusion) {
             double camX = frustumCuller.getCameraX();
             double camY = frustumCuller.getCameraY();
             double camZ = frustumCuller.getCameraZ();
 
-            if (!net.vulkanplus.culling.VulkanSectionVisibility.isAabbVisible(
-                    minX, minY, minZ, maxX, maxY, maxZ, camX, camY, camZ)) {
-                frustumCuller.recordOccludedEntity();
-                BlockEntityOcclusionCuller.culledOccludedBlockEntities++;
+            // Distance culling for non-protected block entities
+            double dx = (pos.getX() + 0.5) - camX;
+            double dy = (pos.getY() + 0.5) - camY;
+            double dz = (pos.getZ() + 0.5) - camZ;
+            double maxDist = 96.0 * config.cullingDistanceFactor;
+            if (dx * dx + dy * dy + dz * dz > maxDist * maxDist) {
                 cir.setReturnValue(null);
                 return;
             }
 
-            if (BlockEntityOcclusionCuller.shouldCullUnchecked(blockEntity, camX, camY, camZ)) {
-                frustumCuller.recordOccludedEntity();
-                cir.setReturnValue(null);
+            // Give chests and large tile entities a generous margin to prevent pop-in
+            double minX = pos.getX() - 0.5;
+            double minY = pos.getY() - 0.5;
+            double minZ = pos.getZ() - 0.5;
+            double maxX = pos.getX() + 1.5;
+            double maxY = pos.getY() + 1.5;
+            double maxZ = pos.getZ() + 1.5;
+
+            boolean isChest = (type == BlockEntityType.CHEST || type == BlockEntityType.TRAPPED_CHEST);
+            // Double chests extend across two blocks; expand symmetrically in all horizontal directions
+            if (isChest) {
+                minX = pos.getX() - 1.5;
+                maxX = pos.getX() + 2.5;
+                minZ = pos.getZ() - 1.5;
+                maxZ = pos.getZ() + 2.5;
+                minY = pos.getY() - 0.2;
+                maxY = pos.getY() + 1.8;
+            } else if (type == BlockEntityType.BANNER) {
+                maxY = pos.getY() + 2.2;
             }
+
+            if (!frustumCuller.isAabbVisible(minX, minY, minZ, maxX, maxY, maxZ)) {
+                cir.setReturnValue(null);
+                return;
+            }
+
+            if (config.enableBlockEntityOcclusion) {
+                if (!net.vulkanplus.culling.VulkanSectionVisibility.isAabbVisible(
+                        minX, minY, minZ, maxX, maxY, maxZ, camX, camY, camZ)) {
+                    frustumCuller.recordOccludedEntity();
+                    BlockEntityOcclusionCuller.culledOccludedBlockEntities++;
+                    cir.setReturnValue(null);
+                    return;
+                }
+
+                if (!(isChest && config.chestProtection)
+                        && BlockEntityOcclusionCuller.shouldCullUnchecked(blockEntity, camX, camY, camZ)) {
+                    frustumCuller.recordOccludedEntity();
+                    cir.setReturnValue(null);
+                }
+            }
+        } catch (Throwable ignored) {
+            // Fail-open on unexpected errors
         }
     }
 }

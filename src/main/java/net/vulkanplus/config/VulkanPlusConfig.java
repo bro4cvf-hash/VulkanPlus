@@ -73,16 +73,23 @@ public class VulkanPlusConfig {
     public boolean noChunkFade = false;
     public boolean fastChest = false;
     public boolean shitFoliage = false;
+    public boolean fullBright = false;
 
     // Engine optimizations (C2ME & MemoryLeakFix) - Enabled by default
     public boolean enableMemoryLeakFix = true;
     public boolean enableC2MeOptimizations = true;
 
+    public boolean enableAnimationLod = true;
+    public double animationLodDistance = 32.0;
+    public boolean enableEntityShadowCulling = true;
+    public double entityShadowMaxDistance = 24.0;
+    public int vramBudgetMb = 2048;
+
     public boolean isAssPcActive() {
         return noMobAnimations || noDroppedItemAnimation || staticExpAnimations
                 || noParticles || noTextureAnimations || noEntityShadows
                 || noItemGlint || noSky || noFog || noBlockEntityAnimations
-                || noChunkFade || fastChest || shitFoliage;
+                || noChunkFade || fastChest || shitFoliage || fullBright;
     }
 
     public VulkanPlusConfig() {
@@ -114,7 +121,7 @@ public class VulkanPlusConfig {
                 this.enableMatrixPooling = true;
                 this.opaqueLeaves = true;
                 this.enableFastFoliage = true;
-                this.foliageDensity = 75;
+                this.foliageDensity = 100;
                 this.enableThreadPriority = true;
                 this.renderThreadPriority = 9;
                 this.workerThreadPriority = 1;
@@ -127,7 +134,6 @@ public class VulkanPlusConfig {
                 this.particleCullingDistance = 24.0;
                 this.beaconProtection = true;
                 this.chestProtection = true;
-                this.enableExordium = false;
                 this.hudTargetFps = 30;
                 this.enableScreenPacing = true;
                 this.screenTargetFps = 30;
@@ -136,6 +142,11 @@ public class VulkanPlusConfig {
                 this.separateCrosshair = true;
                 this.bypassInDebugScreen = true;
                 this.fastFadeTransitions = true;
+                this.enableAnimationLod = true;
+                this.animationLodDistance = 24.0;
+                this.enableEntityShadowCulling = true;
+                this.entityShadowMaxDistance = 16.0;
+                this.vramBudgetMb = 2048;
             }
             case BALANCED -> {
                 this.enableBufferPooling = true;
@@ -170,7 +181,6 @@ public class VulkanPlusConfig {
                 this.particleCullingDistance = 32.0;
                 this.beaconProtection = true;
                 this.chestProtection = true;
-                this.enableExordium = false;
                 this.hudTargetFps = 60;
                 this.enableScreenPacing = true;
                 this.screenTargetFps = 60;
@@ -179,6 +189,11 @@ public class VulkanPlusConfig {
                 this.separateCrosshair = true;
                 this.bypassInDebugScreen = true;
                 this.fastFadeTransitions = true;
+                this.enableAnimationLod = true;
+                this.animationLodDistance = 32.0;
+                this.enableEntityShadowCulling = true;
+                this.entityShadowMaxDistance = 24.0;
+                this.vramBudgetMb = 2048;
             }
             case EXTREME -> {
                 this.enableBufferPooling = true;
@@ -200,7 +215,7 @@ public class VulkanPlusConfig {
                 this.enableMatrixPooling = true;
                 this.opaqueLeaves = true;
                 this.enableFastFoliage = true;
-                this.foliageDensity = 50;
+                this.foliageDensity = 100;
                 this.enableThreadPriority = true;
                 this.renderThreadPriority = 9;
                 this.workerThreadPriority = 1;
@@ -213,7 +228,6 @@ public class VulkanPlusConfig {
                 this.particleCullingDistance = 16.0;
                 this.beaconProtection = true;
                 this.chestProtection = false;
-                this.enableExordium = false;
                 this.hudTargetFps = 30;
                 this.enableScreenPacing = true;
                 this.screenTargetFps = 30;
@@ -222,6 +236,11 @@ public class VulkanPlusConfig {
                 this.separateCrosshair = true;
                 this.bypassInDebugScreen = true;
                 this.fastFadeTransitions = true;
+                this.enableAnimationLod = true;
+                this.animationLodDistance = 16.0;
+                this.enableEntityShadowCulling = true;
+                this.entityShadowMaxDistance = 12.0;
+                this.vramBudgetMb = 2048;
             }
         }
     }
@@ -255,11 +274,15 @@ public class VulkanPlusConfig {
                 && this.foliageDensity == sample.foliageDensity
                 && this.enableThreadPriority == sample.enableThreadPriority
                 && this.chestProtection == sample.chestProtection
-                && this.enableExordium == sample.enableExordium
                 && this.hudTargetFps == sample.hudTargetFps
                 && this.enableScreenPacing == sample.enableScreenPacing
                 && this.screenTargetFps == sample.screenTargetFps
-                && this.separateCrosshair == sample.separateCrosshair;
+                && this.separateCrosshair == sample.separateCrosshair
+                && this.enableAnimationLod == sample.enableAnimationLod
+                && Double.compare(this.animationLodDistance, sample.animationLodDistance) == 0
+                && this.enableEntityShadowCulling == sample.enableEntityShadowCulling
+                && Double.compare(this.entityShadowMaxDistance, sample.entityShadowMaxDistance) == 0
+                && this.vramBudgetMb == sample.vramBudgetMb;
     }
 
     /**
@@ -273,70 +296,84 @@ public class VulkanPlusConfig {
     }
 
     /**
+     * Copies all configuration values from another instance in-place.
+     */
+    public void copyFrom(VulkanPlusConfig other) {
+        if (other == null || other == this) return;
+        this.enabled = other.enabled;
+        this.enableBufferPooling = other.enableBufferPooling;
+        this.enableDescriptorCaching = other.enableDescriptorCaching;
+        this.enablePsoCache = other.enablePsoCache;
+        this.enableReverseZ = other.enableReverseZ;
+        this.enableSwapchainTuning = other.enableSwapchainTuning;
+        this.presentMode = other.presentMode;
+        this.enableFastMath = other.enableFastMath;
+        this.enableFastRandom = other.enableFastRandom;
+        this.enableMoreCulling = other.enableMoreCulling;
+        this.enableEntityCulling = other.enableEntityCulling;
+        this.enableBlockEntityCulling = other.enableBlockEntityCulling;
+        this.enableBlockEntityOcclusion = other.enableBlockEntityOcclusion;
+        this.enableSmartLeaves = other.enableSmartLeaves;
+        this.enableBeaconBeamCulling = other.enableBeaconBeamCulling;
+        this.enableExtraGlassCulling = other.enableExtraGlassCulling;
+        this.enableParticleCulling = other.enableParticleCulling;
+        this.enableMatrixPooling = other.enableMatrixPooling;
+        this.opaqueLeaves = other.opaqueLeaves;
+        this.enableFastFoliage = other.enableFastFoliage;
+        this.foliageDensity = other.foliageDensity;
+        this.enableThreadPriority = other.enableThreadPriority;
+        this.renderThreadPriority = other.renderThreadPriority;
+        this.workerThreadPriority = other.workerThreadPriority;
+        this.ioThreadPriority = other.ioThreadPriority;
+        this.enableFastItemFrames = other.enableFastItemFrames;
+        this.enableItemFrameBlockOcclusion = other.enableItemFrameBlockOcclusion;
+        this.itemFrameMaxDistance = other.itemFrameMaxDistance;
+        this.itemFrameItemDistance = other.itemFrameItemDistance;
+        this.cullingDistanceFactor = other.cullingDistanceFactor;
+        this.particleCullingDistance = other.particleCullingDistance;
+        this.beaconProtection = other.beaconProtection;
+        this.chestProtection = other.chestProtection;
+        this.showDiagnosticsHud = other.showDiagnosticsHud;
+        this.showFps = other.showFps;
+        this.activePreset = other.activePreset;
+        this.noMobAnimations = other.noMobAnimations;
+        this.noDroppedItemAnimation = other.noDroppedItemAnimation;
+        this.staticExpAnimations = other.staticExpAnimations;
+        this.noParticles = other.noParticles;
+        this.noTextureAnimations = other.noTextureAnimations;
+        this.noEntityShadows = other.noEntityShadows;
+        this.noItemGlint = other.noItemGlint;
+        this.noSky = other.noSky;
+        this.noFog = other.noFog;
+        this.noBlockEntityAnimations = other.noBlockEntityAnimations;
+        this.noChunkFade = other.noChunkFade;
+        this.fastChest = other.fastChest;
+        this.shitFoliage = other.shitFoliage;
+        this.fullBright = other.fullBright;
+        this.enableMemoryLeakFix = other.enableMemoryLeakFix;
+        this.enableC2MeOptimizations = other.enableC2MeOptimizations;
+        this.enableExordium = other.enableExordium;
+        this.hudTargetFps = other.hudTargetFps;
+        this.enableScreenPacing = other.enableScreenPacing;
+        this.screenTargetFps = other.screenTargetFps;
+        this.instantInputResponsiveness = other.instantInputResponsiveness;
+        this.dynamicHudUpdates = other.dynamicHudUpdates;
+        this.separateCrosshair = other.separateCrosshair;
+        this.bypassInDebugScreen = other.bypassInDebugScreen;
+        this.fastFadeTransitions = other.fastFadeTransitions;
+        this.enableAnimationLod = other.enableAnimationLod;
+        this.animationLodDistance = other.animationLodDistance;
+        this.enableEntityShadowCulling = other.enableEntityShadowCulling;
+        this.entityShadowMaxDistance = other.entityShadowMaxDistance;
+        this.vramBudgetMb = other.vramBudgetMb;
+    }
+
+    /**
      * Creates a deep copy of this configuration.
      */
     public VulkanPlusConfig copy() {
         VulkanPlusConfig clone = new VulkanPlusConfig();
-        clone.enabled = this.enabled;
-        clone.enableBufferPooling = this.enableBufferPooling;
-        clone.enableDescriptorCaching = this.enableDescriptorCaching;
-        clone.enablePsoCache = this.enablePsoCache;
-        clone.enableReverseZ = this.enableReverseZ;
-        clone.enableSwapchainTuning = this.enableSwapchainTuning;
-        clone.presentMode = this.presentMode;
-        clone.enableFastMath = this.enableFastMath;
-        clone.enableFastRandom = this.enableFastRandom;
-        clone.enableMoreCulling = this.enableMoreCulling;
-        clone.enableEntityCulling = this.enableEntityCulling;
-        clone.enableBlockEntityCulling = this.enableBlockEntityCulling;
-        clone.enableBlockEntityOcclusion = this.enableBlockEntityOcclusion;
-        clone.enableSmartLeaves = this.enableSmartLeaves;
-        clone.enableBeaconBeamCulling = this.enableBeaconBeamCulling;
-        clone.enableExtraGlassCulling = this.enableExtraGlassCulling;
-        clone.enableParticleCulling = this.enableParticleCulling;
-        clone.enableMatrixPooling = this.enableMatrixPooling;
-        clone.opaqueLeaves = this.opaqueLeaves;
-        clone.enableFastFoliage = this.enableFastFoliage;
-        clone.foliageDensity = this.foliageDensity;
-        clone.enableThreadPriority = this.enableThreadPriority;
-        clone.renderThreadPriority = this.renderThreadPriority;
-        clone.workerThreadPriority = this.workerThreadPriority;
-        clone.ioThreadPriority = this.ioThreadPriority;
-        clone.enableFastItemFrames = this.enableFastItemFrames;
-        clone.enableItemFrameBlockOcclusion = this.enableItemFrameBlockOcclusion;
-        clone.itemFrameMaxDistance = this.itemFrameMaxDistance;
-        clone.itemFrameItemDistance = this.itemFrameItemDistance;
-        clone.cullingDistanceFactor = this.cullingDistanceFactor;
-        clone.particleCullingDistance = this.particleCullingDistance;
-        clone.beaconProtection = this.beaconProtection;
-        clone.chestProtection = this.chestProtection;
-        clone.showDiagnosticsHud = this.showDiagnosticsHud;
-        clone.showFps = this.showFps;
-        clone.activePreset = this.activePreset;
-        clone.noMobAnimations = this.noMobAnimations;
-        clone.noDroppedItemAnimation = this.noDroppedItemAnimation;
-        clone.staticExpAnimations = this.staticExpAnimations;
-        clone.noParticles = this.noParticles;
-        clone.noTextureAnimations = this.noTextureAnimations;
-        clone.noEntityShadows = this.noEntityShadows;
-        clone.noItemGlint = this.noItemGlint;
-        clone.noSky = this.noSky;
-        clone.noFog = this.noFog;
-        clone.noBlockEntityAnimations = this.noBlockEntityAnimations;
-        clone.noChunkFade = this.noChunkFade;
-        clone.fastChest = this.fastChest;
-        clone.shitFoliage = this.shitFoliage;
-        clone.enableMemoryLeakFix = this.enableMemoryLeakFix;
-        clone.enableC2MeOptimizations = this.enableC2MeOptimizations;
-        clone.enableExordium = this.enableExordium;
-        clone.hudTargetFps = this.hudTargetFps;
-        clone.enableScreenPacing = this.enableScreenPacing;
-        clone.screenTargetFps = this.screenTargetFps;
-        clone.instantInputResponsiveness = this.instantInputResponsiveness;
-        clone.dynamicHudUpdates = this.dynamicHudUpdates;
-        clone.separateCrosshair = this.separateCrosshair;
-        clone.bypassInDebugScreen = this.bypassInDebugScreen;
-        clone.fastFadeTransitions = this.fastFadeTransitions;
+        clone.copyFrom(this);
         return clone;
     }
 }

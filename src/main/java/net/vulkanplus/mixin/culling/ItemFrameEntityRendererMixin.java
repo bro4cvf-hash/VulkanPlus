@@ -17,6 +17,7 @@ public abstract class ItemFrameEntityRendererMixin<T extends ItemFrameEntity> {
     @Inject(method = "updateRenderState(Lnet/minecraft/entity/decoration/ItemFrameEntity;Lnet/minecraft/client/render/entity/state/ItemFrameEntityRenderState;F)V", at = @At("RETURN"))
     private void onUpdateRenderState(T entity, ItemFrameEntityRenderState state, float tickDelta, CallbackInfo ci) {
         MinecraftClient mc = MinecraftClient.getInstance();
+        if (mc == null || state == null || entity == null) return;
         if (mc.gameRenderer != null && mc.gameRenderer.getCamera() != null) {
             Vec3d camPos = mc.gameRenderer.getCamera().getCameraPos();
             if (camPos != null) {
@@ -24,14 +25,18 @@ public abstract class ItemFrameEntityRendererMixin<T extends ItemFrameEntity> {
                 // make invisible and clear item/map state for 0 draw calls.
                 if (ItemFrameCuller.shouldCullFrame(entity, camPos.x, camPos.y, camPos.z)) {
                     state.invisible = true;
-                    state.itemRenderState.clear();
+                    if (state.itemRenderState != null) {
+                        state.itemRenderState.clear();
+                    }
                     state.mapId = null;
                     return;
                 }
 
                 // If only the contained 3D item stack exceeds distance, clear item/map model state.
                 if (ItemFrameCuller.shouldCullContainedItem(entity, camPos.x, camPos.y, camPos.z)) {
-                    state.itemRenderState.clear();
+                    if (state.itemRenderState != null) {
+                        state.itemRenderState.clear();
+                    }
                     state.mapId = null;
                 }
             }

@@ -18,6 +18,9 @@ public class ItemEntityRendererMixin {
             at = @At("RETURN")
     )
     private void onUpdateRenderState(ItemEntity entity, ItemEntityRenderState state, float tickDelta, CallbackInfo ci) {
+        if (state == null) {
+            return;
+        }
         VulkanPlusConfig cfg = ConfigManager.getConfig();
         if (cfg != null && cfg.enabled && cfg.noDroppedItemAnimation) {
             state.age = 0.0f;

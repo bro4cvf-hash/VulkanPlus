@@ -38,27 +38,29 @@ public class BeaconBlockEntityRendererMixin {
     ) {
         VulkanPlusConfig config = ConfigManager.getConfig();
         if (config == null || !config.enabled || !config.enableBeaconBeamCulling) return;
-
-        MinecraftClient mc = MinecraftClient.getInstance();
-        if (mc.gameRenderer == null || mc.gameRenderer.getCamera() == null) return;
-        Vec3d camPos = mc.gameRenderer.getCamera().getCameraPos();
-        if (camPos == null) return;
+        if (matrices == null || matrices.peek() == null) return;
+        if (RenderOptimizer.getFrustumCuller() == null) return;
 
         Matrix4f posMatrix = matrices.peek().getPositionMatrix();
+        if (posMatrix == null) return;
         float relX = posMatrix.m30();
         float relY = posMatrix.m31();
         float relZ = posMatrix.m32();
 
-        float minRelX = relX - 0.5f;
-        float maxRelX = relX + 0.5f;
+        float centerX = relX + 0.5f;
+        float centerZ = relZ + 0.5f;
+        float radius = Math.max(0.5f, outerRadius);
+
+        float minRelX = centerX - radius;
+        float maxRelX = centerX + radius;
         float minRelY = relY + yOffset;
         float maxRelY = relY + yOffset + height;
-        float minRelZ = relZ - 0.5f;
-        float maxRelZ = relZ + 0.5f;
+        float minRelZ = centerZ - radius;
+        float maxRelZ = centerZ + radius;
 
-        if (!RenderOptimizer.getFrustumCuller().isAabbVisible(
-                camPos.x + minRelX, camPos.y + minRelY, camPos.z + minRelZ,
-                camPos.x + maxRelX, camPos.y + maxRelY, camPos.z + maxRelZ)) {
+        if (!RenderOptimizer.getFrustumCuller().isRelativeAabbVisible(
+                minRelX, minRelY, minRelZ,
+                maxRelX, maxRelY, maxRelZ)) {
             ci.cancel();
         }
     }

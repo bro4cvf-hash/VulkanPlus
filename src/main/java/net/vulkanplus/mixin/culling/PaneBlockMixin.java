@@ -18,7 +18,8 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 public class PaneBlockMixin {
 
     @Inject(method = "isSideInvisible", at = @At("HEAD"), cancellable = true)
-    private void cullAdjoiningPaneFaces(BlockState state, BlockState neighborState, Direction direction, CallbackInfoReturnable<Boolean> cir) {
+    private void cullMatchingPaneSides(BlockState state, BlockState neighborState, Direction direction, CallbackInfoReturnable<Boolean> cir) {
+        if (state == null || neighborState == null || direction == null) return;
         VulkanPlusConfig config = ConfigManager.getConfig();
         if (config == null || !config.enabled || !config.enableExtraGlassCulling) return;
 

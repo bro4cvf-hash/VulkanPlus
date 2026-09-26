@@ -12,7 +12,10 @@ public class ThreadPriorityManager {
     public static final int PRIORITY_IO = 3;
     public static final int PRIORITY_WORKER = Thread.MIN_PRIORITY; // 1
 
+    private static final long SWEEP_COOLDOWN_NS = 5_000_000_000L; // 5 seconds
     private static volatile boolean initialized = false;
+    private static volatile long lastSweepTimeNs = 0L;
+    private static volatile int lastSweepConfigHash = 0;
 
     /**
      * Clamps a priority value between MIN_PRIORITY and MAX_PRIORITY.
@@ -75,6 +78,10 @@ public class ThreadPriorityManager {
      * Invoked when settings are modified in the configuration screen or on demand.
      */
     public static void sweepAndApplyAll() {
+        sweepAndApplyAll(true);
+    }
+
+    public static void sweepAndApplyAll(boolean force) {
         VulkanPlusConfig config = ConfigManager.getConfig();
         boolean active = config.enabled && config.enableThreadPriority;
 
@@ -82,8 +89,31 @@ public class ThreadPriorityManager {
         int workerPri = clampPriority(config.workerThreadPriority);
         int ioPri = clampPriority(config.ioThreadPriority);
 
-        for (Thread t : Thread.getAllStackTraces().keySet()) {
-            if (!t.isAlive()) continue;
+        int currentConfigHash = (active ? 1 : 0) * 31
+                + renderPri * 961
+                + workerPri * 29791
+                + ioPri * 923521;
+
+        long now = System.nanoTime();
+        if (!force
+                && lastSweepTimeNs != 0L
+                && currentConfigHash == lastSweepConfigHash
+                && (now - lastSweepTimeNs) < SWEEP_COOLDOWN_NS) {
+            return;
+        }
+        lastSweepTimeNs = now;
+        lastSweepConfigHash = currentConfigHash;
+
+        ThreadGroup rootGroup = Thread.currentThread().getThreadGroup();
+        while (rootGroup.getParent() != null) {
+            rootGroup = rootGroup.getParent();
+        }
+        Thread[] threads = new Thread[rootGroup.activeCount() * 2 + 16];
+        int count = rootGroup.enumerate(threads, true);
+
+        for (int i = 0; i < count; i++) {
+            Thread t = threads[i];
+            if (t == null || !t.isAlive()) continue;
             String name = t.getName();
             if (name == null) continue;
 

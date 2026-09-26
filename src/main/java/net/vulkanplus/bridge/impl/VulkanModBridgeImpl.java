@@ -17,10 +17,11 @@ public class VulkanModBridgeImpl implements RenderEngineBridge {
     private static final VulkanStateCache STATE_CACHE = new VulkanStateCache();
     private final PersistentPipelineCache psoCache = new PersistentPipelineCache();
     private final VulkanStateCache stateCache = STATE_CACHE;
-    private TransientRingBuffer ringBuffer;
-    private SlabSubAllocator slabAllocator;
+    private volatile TransientRingBuffer ringBuffer;
+    private volatile SlabSubAllocator slabAllocator;
 
     private boolean isInitialized = false;
+    private boolean swapchainTuned = false;
 
     public VulkanModBridgeImpl() {
     }
@@ -37,33 +38,52 @@ public class VulkanModBridgeImpl implements RenderEngineBridge {
 
     @Override
     public void onRenderInit() {
-        VulkanPlusConfig config = ConfigManager.getConfig();
         VulkanPlusMod.LOGGER.info("[VulkanPlus] Initializing VulkanMod Companion Bridge...");
-
-        if (config.enableBufferPooling) {
-            this.ringBuffer = new TransientRingBuffer(16 * 1024 * 1024);
-            this.slabAllocator = new SlabSubAllocator();
-            VulkanPlusMod.LOGGER.info("[VulkanPlus] Transient ring buffer and slab sub-allocator initialized.");
-        }
-
-        try {
-            if (config.enabled && config.enableSwapchainTuning && net.vulkanmod.Initializer.CONFIG != null) {
-                if (net.vulkanmod.Initializer.CONFIG.frameQueueSize < 3) {
-                    net.vulkanmod.Initializer.CONFIG.frameQueueSize = 3;
-                    VulkanPlusMod.LOGGER.info("[VulkanPlus] Tuned VulkanMod frameQueueSize to 3 for triple-buffered frame pacing.");
-                }
-            }
-        } catch (Throwable ignored) {
-        }
 
         VulkanModGuiIntegration.register();
 
         isInitialized = true;
     }
 
+    private static boolean isVulkanMemoryManagerReady() {
+        try {
+            return net.vulkanmod.vulkan.Vulkan.getAllocator() != 0L
+                    && net.vulkanmod.vulkan.Renderer.getInstance() != null;
+        } catch (Throwable t) {
+            return false;
+        }
+    }
+
+    public void tryTuneSwapchain() {
+        if (swapchainTuned) {
+            return;
+        }
+        VulkanPlusConfig config = ConfigManager.getConfig();
+        if (config == null || !config.enabled || !config.enableSwapchainTuning) {
+            return;
+        }
+        try {
+            if (net.vulkanmod.Initializer.CONFIG != null
+                    && net.vulkanmod.vulkan.Vulkan.getAllocator() != 0L
+                    && net.vulkanmod.vulkan.memory.MemoryTypes.GPU_MEM != null
+                    && net.vulkanmod.vulkan.memory.MemoryTypes.GPU_MEM.vkMemoryHeap != null) {
+                long deviceMb = net.vulkanmod.vulkan.memory.MemoryTypes.GPU_MEM.vkMemoryHeap.size() / (1024L * 1024L);
+                if (deviceMb >= 8192 && net.vulkanmod.Initializer.CONFIG.frameQueueSize < 3) {
+                    net.vulkanmod.Initializer.CONFIG.frameQueueSize = 3;
+                    scheduleSwapChainUpdateIfNeeded();
+                    VulkanPlusMod.LOGGER.info("[VulkanPlus] Tuned VulkanMod frameQueueSize to 3 for triple-buffered frame pacing ({} MB VRAM).", deviceMb);
+                }
+                swapchainTuned = true;
+            }
+        } catch (Throwable ignored) {
+        }
+    }
+
     public static void scheduleSwapChainUpdateIfNeeded() {
         try {
-            net.vulkanmod.vulkan.Renderer.scheduleSwapChainUpdate();
+            if (net.vulkanmod.vulkan.Renderer.getInstance() != null) {
+                net.vulkanmod.vulkan.Renderer.scheduleSwapChainUpdate();
+            }
         } catch (Throwable ignored) {
         }
     }
@@ -71,6 +91,10 @@ public class VulkanModBridgeImpl implements RenderEngineBridge {
     @Override
     public void onRenderFrameBegin() {
         if (!isInitialized) return;
+
+        if (!swapchainTuned) {
+            tryTuneSwapchain();
+        }
 
         if (ringBuffer != null) {
             ringBuffer.advanceFrame();
@@ -88,25 +112,29 @@ public class VulkanModBridgeImpl implements RenderEngineBridge {
     @Override
     public void onShutdown() {
         VulkanPlusMod.LOGGER.info("[VulkanPlus] VulkanMod bridge shutting down. Releasing allocators.");
+        if (ringBuffer != null) {
+            ringBuffer.destroy();
+            this.ringBuffer = null;
+        }
         if (slabAllocator != null) {
             slabAllocator.clear();
-        }
-        if (ringBuffer != null) {
-            ringBuffer.reset();
+            this.slabAllocator = null;
         }
     }
 
     @Override
     public long getVramUsed() {
-        try {
-            net.vulkanmod.vulkan.memory.MemoryManager mm = net.vulkanmod.vulkan.memory.MemoryManager.getInstance();
-            if (mm != null) {
-                long usedMb = mm.getAllocatedDeviceMemoryMB();
-                if (usedMb > 0) {
-                    return usedMb * 1024L * 1024L;
+        if (isVulkanMemoryManagerReady()) {
+            try {
+                net.vulkanmod.vulkan.memory.MemoryManager mm = net.vulkanmod.vulkan.memory.MemoryManager.getInstance();
+                if (mm != null) {
+                    long usedMb = mm.getAllocatedDeviceMemoryMB();
+                    if (usedMb > 0) {
+                        return usedMb * 1024L * 1024L;
+                    }
                 }
+            } catch (Throwable ignored) {
             }
-        } catch (Throwable ignored) {
         }
 
         long used = 0;
@@ -121,15 +149,21 @@ public class VulkanModBridgeImpl implements RenderEngineBridge {
 
     @Override
     public long getVramAllocated() {
-        try {
-            net.vulkanmod.vulkan.memory.MemoryManager mm = net.vulkanmod.vulkan.memory.MemoryManager.getInstance();
-            if (mm != null) {
-                long deviceMb = mm.getDeviceMemoryMB();
-                if (deviceMb > 0) {
-                    return deviceMb * 1024L * 1024L;
+        if (isVulkanMemoryManagerReady()) {
+            try {
+                net.vulkanmod.vulkan.memory.MemoryManager mm = net.vulkanmod.vulkan.memory.MemoryManager.getInstance();
+                if (mm != null) {
+                    long allocatedBytes = (mm.getAllocatedDeviceMemoryMB() + mm.getNativeMemoryMB()) * 1024L * 1024L;
+                    if (allocatedBytes > 0) {
+                        return allocatedBytes;
+                    }
+                    long deviceMb = mm.getDeviceMemoryMB();
+                    if (deviceMb > 0) {
+                        return deviceMb * 1024L * 1024L;
+                    }
                 }
+            } catch (Throwable ignored) {
             }
-        } catch (Throwable ignored) {
         }
 
         long allocated = 0;
@@ -151,10 +185,32 @@ public class VulkanModBridgeImpl implements RenderEngineBridge {
     }
 
     public TransientRingBuffer getRingBuffer() {
-        return ringBuffer;
+        TransientRingBuffer rb = this.ringBuffer;
+        if (rb == null && ConfigManager.getConfig().enableBufferPooling) {
+            synchronized (this) {
+                rb = this.ringBuffer;
+                if (rb == null) {
+                    rb = new TransientRingBuffer(2 * 1024 * 1024);
+                    this.ringBuffer = rb;
+                    VulkanPlusMod.LOGGER.info("[VulkanPlus] Transient ring buffer lazily initialized.");
+                }
+            }
+        }
+        return rb;
     }
 
     public SlabSubAllocator getSlabAllocator() {
-        return slabAllocator;
+        SlabSubAllocator sa = this.slabAllocator;
+        if (sa == null && ConfigManager.getConfig().enableBufferPooling) {
+            synchronized (this) {
+                sa = this.slabAllocator;
+                if (sa == null) {
+                    sa = new SlabSubAllocator();
+                    this.slabAllocator = sa;
+                    VulkanPlusMod.LOGGER.info("[VulkanPlus] Slab sub-allocator lazily initialized.");
+                }
+            }
+        }
+        return sa;
     }
 }

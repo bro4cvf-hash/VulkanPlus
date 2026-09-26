@@ -63,16 +63,15 @@ public abstract class PipelineMixin {
             }
 
             PersistentPipelineCache psoCache = getPsoCacheInstance();
-            ByteBuffer cachedData = psoCache.loadCacheData(vendorId, deviceId, uuid);
-            if (cachedData == null || cachedData.remaining() < PersistentPipelineCache.HEADER_SIZE) {
+            ByteBuffer directData = psoCache.loadCacheDataDirect(vendorId, deviceId, uuid);
+            if (directData == null || directData.remaining() < PersistentPipelineCache.HEADER_SIZE) {
+                if (directData != null) {
+                    MemoryUtil.memFree(directData);
+                }
                 return;
             }
 
-            ByteBuffer directData = MemoryUtil.memAlloc(cachedData.remaining());
             try (MemoryStack stack = MemoryStack.stackPush()) {
-                directData.put(cachedData.duplicate());
-                directData.flip();
-
                 VkPipelineCacheCreateInfo cacheCreateInfo = VkPipelineCacheCreateInfo.calloc(stack);
                 cacheCreateInfo.sType(VK10.VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO);
                 cacheCreateInfo.pInitialData(directData);
@@ -109,9 +108,7 @@ public abstract class PipelineMixin {
             ByteBuffer directBuf = MemoryUtil.memAlloc(size);
             try {
                 if (VK10.vkGetPipelineCacheData(DEVICE, PIPELINE_CACHE, pDataSize, directBuf) == VK10.VK_SUCCESS) {
-                    byte[] bytes = new byte[size];
-                    directBuf.get(bytes);
-                    getPsoCacheInstance().saveCacheData(bytes);
+                    getPsoCacheInstance().saveCacheDataDirect(directBuf);
                 }
             } finally {
                 MemoryUtil.memFree(directBuf);

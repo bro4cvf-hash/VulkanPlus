@@ -62,8 +62,8 @@ public abstract class FoliageBlockMixin {
     @Inject(method = "getAmbientOcclusionLightLevel", at = @At("HEAD"), cancellable = true)
     private void vulkanplus$fastFoliageAmbientLightLevel(BlockView world, BlockPos pos, CallbackInfoReturnable<Float> cir) {
         VulkanPlusConfig config = ConfigManager.getConfig();
-        if (config != null && config.enabled && (config.enableFastFoliage || config.shitFoliage)) {
-            if (FoliageCuller.isFoliageOrPlant(this.getBlock())) {
+        if (config != null && config.enabled) {
+            if (config.fullBright || ((config.enableFastFoliage || config.shitFoliage) && FoliageCuller.isFoliageOrPlant(this.getBlock()))) {
                 cir.setReturnValue(1.0f);
             }
         }

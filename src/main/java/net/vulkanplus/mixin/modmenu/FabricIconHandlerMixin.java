@@ -27,10 +27,16 @@ public abstract class FabricIconHandlerMixin {
     @Shadow
     abstract void cacheModIcon(Path path, NativeImageBackedTexture tex);
 
-    @Inject(method = "createIcon", at = @At("HEAD"), cancellable = true)
+    @Inject(method = "createIcon", at = @At("HEAD"), cancellable = true, require = 0)
     private void vulcanplus$sanitizeWindowsIconPath(ModContainer iconSource, String iconPath, CallbackInfoReturnable<NativeImageBackedTexture> cir) {
+        if (iconSource == null || iconPath == null || iconPath.isEmpty() || cir == null) {
+            return;
+        }
         try {
             Path path = iconSource.getPath(iconPath);
+            if (path == null) {
+                return;
+            }
             NativeImageBackedTexture cachedIcon = getCachedModIcon(path);
             if (cachedIcon != null) {
                 cir.setReturnValue(cachedIcon);
@@ -39,6 +45,9 @@ public abstract class FabricIconHandlerMixin {
 
             try (InputStream inputStream = Files.newInputStream(path)) {
                 NativeImage image = NativeImage.read(Objects.requireNonNull(inputStream));
+                if (image == null) {
+                    return;
+                }
                 Validate.validState(image.getHeight() == image.getWidth(), "Must be square icon");
 
                 // Minecraft 1.21+ strictly validates identifier paths against [a-z0-9/._-].
@@ -48,6 +57,9 @@ public abstract class FabricIconHandlerMixin {
                 String safePath = rawPath.replaceAll("[^a-z0-9/._-]", "_");
                 while (safePath.startsWith("/")) {
                     safePath = safePath.substring(1);
+                }
+                if (safePath.isEmpty()) {
+                    safePath = "icon";
                 }
 
                 final String finalPath = safePath;

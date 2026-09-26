@@ -111,4 +111,77 @@ public class FastMathTest {
         assertEquals(FastMath.PI, FastMath.atan2(0.0f, -1.0f), 1e-4f);
         assertEquals(-FastMath.HALF_PI, FastMath.atan2(-1.0f, 0.0f), 1e-4f);
     }
+
+    @Test
+    @DisplayName("FastMath.cos large angle precision matches Math.cos within 1.5e-4 across [-1000.0f, 1000.0f]")
+    public void testLargeAngleCosinePrecision() {
+        float step = 0.05f;
+        for (float rad = -1000.0f; rad <= 1000.0f; rad += step) {
+            float expected = (float) Math.cos(rad);
+            float actual = FastMath.cos(rad);
+            assertEquals(expected, actual, 1.5e-4f, "FastMath.cos failed at rad=" + rad);
+        }
+    }
+
+    @Test
+    @DisplayName("Microbenchmark: 1,000,000 iterations throughput for sin, cos, fastInvSqrt, atan2")
+    public void benchmarkFastMathTrigAndSqrtThroughput() {
+        final int iterations = 1_000_000;
+        final int warmup = 100_000;
+
+        // --- FastMath.sin ---
+        float sink = 0.0f;
+        for (int i = 0; i < warmup; i++) {
+            sink += FastMath.sin((float) (i & 1023) * 0.01f);
+        }
+        long startSin = System.nanoTime();
+        for (int i = 0; i < iterations; i++) {
+            sink += FastMath.sin((float) (i & 1023) * 0.01f);
+        }
+        long durationSin = System.nanoTime() - startSin;
+        double nsPerOpSin = (double) durationSin / iterations;
+        long opsPerSecSin = (long) (iterations / (durationSin / 1_000_000_000.0));
+        System.out.printf("[BENCHMARK] FastMath.sin: %.2f ns/op (%,d ops/sec)%n", nsPerOpSin, opsPerSecSin);
+
+        // --- FastMath.cos ---
+        for (int i = 0; i < warmup; i++) {
+            sink += FastMath.cos((float) (i & 1023) * 0.01f);
+        }
+        long startCos = System.nanoTime();
+        for (int i = 0; i < iterations; i++) {
+            sink += FastMath.cos((float) (i & 1023) * 0.01f);
+        }
+        long durationCos = System.nanoTime() - startCos;
+        double nsPerOpCos = (double) durationCos / iterations;
+        long opsPerSecCos = (long) (iterations / (durationCos / 1_000_000_000.0));
+        System.out.printf("[BENCHMARK] FastMath.cos: %.2f ns/op (%,d ops/sec)%n", nsPerOpCos, opsPerSecCos);
+
+        // --- FastMath.fastInvSqrt ---
+        for (int i = 0; i < warmup; i++) {
+            sink += FastMath.fastInvSqrt(1.0f + (float) (i & 1023));
+        }
+        long startSqrt = System.nanoTime();
+        for (int i = 0; i < iterations; i++) {
+            sink += FastMath.fastInvSqrt(1.0f + (float) (i & 1023));
+        }
+        long durationSqrt = System.nanoTime() - startSqrt;
+        double nsPerOpSqrt = (double) durationSqrt / iterations;
+        long opsPerSecSqrt = (long) (iterations / (durationSqrt / 1_000_000_000.0));
+        System.out.printf("[BENCHMARK] FastMath.fastInvSqrt: %.2f ns/op (%,d ops/sec)%n", nsPerOpSqrt, opsPerSecSqrt);
+
+        // --- FastMath.atan2 ---
+        for (int i = 0; i < warmup; i++) {
+            sink += FastMath.atan2((float) ((i & 255) - 128), (float) (((i >> 8) & 255) - 128) + 0.01f);
+        }
+        long startAtan2 = System.nanoTime();
+        for (int i = 0; i < iterations; i++) {
+            sink += FastMath.atan2((float) ((i & 255) - 128), (float) (((i >> 8) & 255) - 128) + 0.01f);
+        }
+        long durationAtan2 = System.nanoTime() - startAtan2;
+        double nsPerOpAtan2 = (double) durationAtan2 / iterations;
+        long opsPerSecAtan2 = (long) (iterations / (durationAtan2 / 1_000_000_000.0));
+        System.out.printf("[BENCHMARK] FastMath.atan2: %.2f ns/op (%,d ops/sec)%n", nsPerOpAtan2, opsPerSecAtan2);
+
+        assertNotEquals(0.0f, sink);
+    }
 }

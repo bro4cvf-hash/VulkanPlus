@@ -39,13 +39,15 @@ public class VulkanPlusConfigScreen extends Screen {
     }
 
     private final Screen parent;
+    private final VulkanPlusConfig initialConfig;
     private VulkanPlusConfig configCopy;
     private Tab currentTab = Tab.GENERAL;
 
     public VulkanPlusConfigScreen(Screen parent) {
         super(Text.literal("Vulkan Plus Settings"));
         this.parent = parent;
-        this.configCopy = ConfigManager.getConfig().copy();
+        this.initialConfig = ConfigManager.getConfig().copy();
+        this.configCopy = this.initialConfig.copy();
     }
 
     @Override
@@ -57,7 +59,9 @@ public class VulkanPlusConfigScreen extends Screen {
         this.addDrawableChild(ButtonWidget.builder(
                 masterSwitchText(configCopy.enabled),
                 button -> {
+                    VulkanPlusConfig prev = ConfigManager.getConfig().copy();
                     configCopy.enabled = !configCopy.enabled;
+                    applyConfigChanges(prev, configCopy, this.client);
                     this.clearAndInit();
                 }
         ).dimensions(centerX - 160, 24, 320, 20)
@@ -132,12 +136,14 @@ public class VulkanPlusConfigScreen extends Screen {
                 this.addDrawableChild(ButtonWidget.builder(
                         presentModeText(configCopy.presentMode),
                         button -> {
+                            VulkanPlusConfig prev = ConfigManager.getConfig().copy();
                             configCopy.presentMode = switch (configCopy.presentMode) {
                                 case "MAILBOX" -> "IMMEDIATE";
                                 case "IMMEDIATE" -> "FIFO";
                                 case "FIFO" -> "FIFO_RELAXED";
                                 default -> "MAILBOX";
                             };
+                            applyConfigChanges(prev, configCopy, this.client);
                             this.clearAndInit();
                         }
                 ).dimensions(col2X, contentY + rowSpacing, btnWidth, btnHeight)
@@ -180,6 +186,13 @@ public class VulkanPlusConfigScreen extends Screen {
                 addToggle(col1X, contentY + rowSpacing * 3, btnWidth, btnHeight, "Chest Protection", configCopy.chestProtection,
                         "Prevents aggressive culling on chests near crosshair to avoid pop-in.",
                         val -> configCopy.chestProtection = val);
+                addToggle(col2X, contentY + rowSpacing * 3, btnWidth, btnHeight, "Mob Anim LOD", configCopy.enableAnimationLod,
+                        "Throttles distant entity limb and head animations based on distance (LOD) to save CPU.",
+                        val -> configCopy.enableAnimationLod = val);
+
+                addToggle(col1X, contentY + rowSpacing * 4, btnWidth, btnHeight, "Shadow Culling", configCopy.enableEntityShadowCulling,
+                        "Skips rendering entity ground shadows beyond distance limits or behind walls.",
+                        val -> configCopy.enableEntityShadowCulling = val);
             }
 
             case GRAPHICS -> {
@@ -198,22 +211,11 @@ public class VulkanPlusConfigScreen extends Screen {
                         val -> configCopy.enableReverseZ = val);
 
                 addToggle(col1X, contentY + rowSpacing * 2, btnWidth, btnHeight, "Fast Foliage", configCopy.enableFastFoliage,
-                        "Cuts cross-model plant geometry by 50%, zeroes random model offsets, and culls stacked plant faces.",
+                        "Cuts cross-model plant geometry by 50% into fast 2D planes, zeroes random model offsets, and optimizes foliage lighting.",
                         val -> configCopy.enableFastFoliage = val);
-                this.addDrawableChild(ButtonWidget.builder(
-                        foliageDensityText(configCopy.foliageDensity),
-                        button -> {
-                            configCopy.foliageDensity = switch (configCopy.foliageDensity) {
-                                case 100 -> 75;
-                                case 75 -> 50;
-                                case 50 -> 25;
-                                default -> 100;
-                            };
-                            this.clearAndInit();
-                        }
-                ).dimensions(col2X, contentY + rowSpacing * 2, btnWidth, btnHeight)
-                 .tooltip(Tooltip.of(Text.literal("Deterministic (x, z) density thinning for decorative ground clutter (100%, 75%, 50%, 25%). Never hides gameplay plants.")))
-                 .build());
+                addToggle(col2X, contentY + rowSpacing * 2, btnWidth, btnHeight, "Engine Fullbright", configCopy.fullBright,
+                        "Bypasses the lighting & AO engine during chunk meshing, skips light-update chunk rebuilds, and locks 100% brightness.",
+                        val -> configCopy.fullBright = val);
             }
 
             case ENGINE -> {
@@ -244,6 +246,23 @@ public class VulkanPlusConfigScreen extends Screen {
                 addToggle(col2X, contentY + rowSpacing * 3, btnWidth, btnHeight, "MemoryLeakFix", configCopy.enableMemoryLeakFix,
                         "Patches vanilla memory leaks including Biome ThreadLocal caches and target retention.",
                         val -> configCopy.enableMemoryLeakFix = val);
+
+                this.addDrawableChild(ButtonWidget.builder(
+                        Text.literal("VRAM Budget: §a" + configCopy.vramBudgetMb + " MB"),
+                        button -> {
+                            VulkanPlusConfig prev = ConfigManager.getConfig().copy();
+                            configCopy.vramBudgetMb = switch (configCopy.vramBudgetMb) {
+                                case 1024 -> 2048;
+                                case 2048 -> 3072;
+                                case 3072 -> 4096;
+                                default -> 1024;
+                            };
+                            applyConfigChanges(prev, configCopy, this.client);
+                            this.clearAndInit();
+                        }
+                ).dimensions(col1X, contentY + rowSpacing * 4, btnWidth, btnHeight)
+                 .tooltip(Tooltip.of(Text.literal("Target VRAM allocation budget for buffer pools and caches (1024 / 2048 / 3072 / 4096 MB).")))
+                 .build());
             }
 
             case EXORDIUM -> {
@@ -253,6 +272,7 @@ public class VulkanPlusConfigScreen extends Screen {
                 this.addDrawableChild(ButtonWidget.builder(
                         Text.literal("HUD FPS: §a" + configCopy.hudTargetFps + " FPS"),
                         button -> {
+                            VulkanPlusConfig prev = ConfigManager.getConfig().copy();
                             configCopy.hudTargetFps = switch (configCopy.hudTargetFps) {
                                 case 15 -> 30;
                                 case 30 -> 45;
@@ -261,6 +281,7 @@ public class VulkanPlusConfigScreen extends Screen {
                                 case 90 -> 120;
                                 default -> 15;
                             };
+                            applyConfigChanges(prev, configCopy, this.client);
                             this.clearAndInit();
                         }
                 ).dimensions(col2X, contentY, btnWidth, btnHeight)
@@ -273,7 +294,9 @@ public class VulkanPlusConfigScreen extends Screen {
                 this.addDrawableChild(ButtonWidget.builder(
                         Text.literal("Screen FPS: §a" + configCopy.screenTargetFps + " FPS"),
                         button -> {
+                            VulkanPlusConfig prev = ConfigManager.getConfig().copy();
                             configCopy.screenTargetFps = (configCopy.screenTargetFps == 30) ? 60 : 30;
+                            applyConfigChanges(prev, configCopy, this.client);
                             this.clearAndInit();
                         }
                 ).dimensions(col2X, contentY + rowSpacing, btnWidth, btnHeight)
@@ -344,6 +367,10 @@ public class VulkanPlusConfigScreen extends Screen {
                 addToggle(col2X, contentY + rowSpacing * 5, btnWidth, btnHeight, "Shit Foliage", configCopy.shitFoliage,
                         "Extreme potato foliage: 75% fewer vertices (single quad), flat lighting, 25% clutter density, and 24-block distance culling.",
                         val -> configCopy.shitFoliage = val);
+
+                addToggle(col1X, contentY + rowSpacing * 6, btnWidth, btnHeight, "Engine Fullbright", configCopy.fullBright,
+                        "Bypasses the lighting & AO engine during chunk meshing, skips light-update chunk rebuilds, and locks 100% brightness.",
+                        val -> configCopy.fullBright = val);
             }
         }
 
@@ -352,7 +379,9 @@ public class VulkanPlusConfigScreen extends Screen {
         this.addDrawableChild(ButtonWidget.builder(
                 Text.literal("§e↺ Reset"),
                 button -> {
+                    VulkanPlusConfig prev = ConfigManager.getConfig().copy();
                     this.configCopy = new VulkanPlusConfig();
+                    applyConfigChanges(prev, this.configCopy, this.client);
                     this.clearAndInit();
                 }
         ).dimensions(centerX - 160, bottomY, 95, 20)
@@ -362,34 +391,9 @@ public class VulkanPlusConfigScreen extends Screen {
         this.addDrawableChild(ButtonWidget.builder(
                 Text.literal("§a✔ Done"),
                 button -> {
-                    VulkanPlusConfig prevConfig = ConfigManager.getConfig();
-                    boolean leavesChanged = (prevConfig.opaqueLeaves != configCopy.opaqueLeaves);
-                    boolean foliageChanged = (prevConfig.enableFastFoliage != configCopy.enableFastFoliage)
-                            || (prevConfig.foliageDensity != configCopy.foliageDensity)
-                            || (prevConfig.shitFoliage != configCopy.shitFoliage)
-                            || (prevConfig.enableSmartLeaves != configCopy.enableSmartLeaves);
-                    boolean swapchainChanged = (prevConfig.enableSwapchainTuning != configCopy.enableSwapchainTuning)
-                            || !java.util.Objects.equals(prevConfig.presentMode, configCopy.presentMode);
-                    ConfigManager.setConfig(configCopy);
-                    ThreadPriorityManager.sweepAndApplyAll();
-                    if (swapchainChanged) {
-                        net.vulkanplus.bridge.impl.VulkanModBridgeImpl.scheduleSwapChainUpdateIfNeeded();
-                    }
-
+                    VulkanPlusConfig prevConfig = ConfigManager.getConfig().copy();
+                    applyConfigChanges(prevConfig, configCopy, this.client);
                     if (this.client != null) {
-                        if (this.client.options != null) {
-                            this.client.options.getCutoutLeaves().setValue(!configCopy.opaqueLeaves);
-                            this.client.options.write();
-                        }
-                        net.minecraft.client.render.BlockRenderLayers.setCutoutLeaves(!configCopy.opaqueLeaves);
-                        net.minecraft.block.LeavesBlock.setCutoutLeaves(!configCopy.opaqueLeaves);
-                        if (leavesChanged) {
-                            net.vulkanplus.bridge.ViskCompatBridge.invalidateAll();
-                            this.client.reloadResourcesConcurrently();
-                        }
-                        if ((leavesChanged || foliageChanged) && this.client.worldRenderer != null) {
-                            this.client.worldRenderer.reload();
-                        }
                         this.client.setScreen(parent);
                     }
                 }
@@ -398,6 +402,9 @@ public class VulkanPlusConfigScreen extends Screen {
         this.addDrawableChild(ButtonWidget.builder(
                 Text.literal("§c✖ Cancel"),
                 button -> {
+                    VulkanPlusConfig prevConfig = ConfigManager.getConfig().copy();
+                    this.configCopy = this.initialConfig.copy();
+                    applyConfigChanges(prevConfig, this.configCopy, this.client);
                     if (this.client != null) {
                         this.client.setScreen(parent);
                     }
@@ -405,11 +412,72 @@ public class VulkanPlusConfigScreen extends Screen {
         ).dimensions(centerX + 65, bottomY, 95, 20).build());
     }
 
+    /**
+     * Applies configuration changes, including the global Master Toggle (config.enabled),
+     * immediately updating leaf cutout state, chunk meshes, swapchain present mode, Exordium cache, and thread priorities.
+     */
+    public static void applyConfigChanges(VulkanPlusConfig prevConfig, VulkanPlusConfig newConfig, net.minecraft.client.MinecraftClient client) {
+        if (newConfig == null) return;
+        if (prevConfig == null) prevConfig = new VulkanPlusConfig();
+
+        boolean masterChanged = (prevConfig.enabled != newConfig.enabled);
+        boolean prevEffectiveOpaqueLeaves = prevConfig.enabled && prevConfig.opaqueLeaves;
+        boolean newEffectiveOpaqueLeaves = newConfig.enabled && newConfig.opaqueLeaves;
+        boolean leavesChanged = (prevEffectiveOpaqueLeaves != newEffectiveOpaqueLeaves);
+
+        boolean foliageOrChunkChanged = masterChanged
+                || (prevConfig.enableFastFoliage != newConfig.enableFastFoliage)
+                || (prevConfig.foliageDensity != newConfig.foliageDensity)
+                || (prevConfig.shitFoliage != newConfig.shitFoliage)
+                || (prevConfig.fullBright != newConfig.fullBright)
+                || (prevConfig.enableSmartLeaves != newConfig.enableSmartLeaves)
+                || (prevConfig.enableExtraGlassCulling != newConfig.enableExtraGlassCulling)
+                || (prevConfig.fastChest != newConfig.fastChest);
+
+        boolean swapchainChanged = masterChanged
+                || (prevConfig.enableSwapchainTuning != newConfig.enableSwapchainTuning)
+                || !java.util.Objects.equals(prevConfig.presentMode, newConfig.presentMode);
+
+        ConfigManager.setConfig(newConfig);
+        ThreadPriorityManager.sweepAndApplyAll();
+
+        if (!newConfig.enabled || !newConfig.enableExordium) {
+            net.vulkanplus.exordium.ExordiumManager.getInstance().cleanup();
+        } else {
+            net.vulkanplus.exordium.ExordiumManager.getInstance().markDirty();
+        }
+
+        if (swapchainChanged) {
+            net.vulkanplus.bridge.impl.VulkanModBridgeImpl.scheduleSwapChainUpdateIfNeeded();
+        }
+
+        if (client != null) {
+            if (client.options != null) {
+                client.options.getCutoutLeaves().setValue(!newEffectiveOpaqueLeaves);
+                client.options.write();
+            }
+            net.minecraft.client.render.BlockRenderLayers.setCutoutLeaves(!newEffectiveOpaqueLeaves);
+            net.minecraft.block.LeavesBlock.setCutoutLeaves(!newEffectiveOpaqueLeaves);
+            if (leavesChanged) {
+                net.vulkanplus.bridge.ViskCompatBridge.invalidateAll();
+                client.reloadResourcesConcurrently();
+            }
+            if (client.gameRenderer != null && client.gameRenderer.getLightmapTextureManager() != null) {
+                client.gameRenderer.getLightmapTextureManager().tick();
+            }
+            if ((leavesChanged || foliageOrChunkChanged) && client.worldRenderer != null) {
+                client.worldRenderer.reload();
+            }
+        }
+    }
+
     private void addToggle(int x, int y, int width, int height, String label, boolean value, String tooltip, Consumer<Boolean> setter) {
         this.addDrawableChild(ButtonWidget.builder(
                 toggleText(label, value),
                 button -> {
+                    VulkanPlusConfig prev = ConfigManager.getConfig().copy();
                     setter.accept(!value);
+                    applyConfigChanges(prev, configCopy, this.client);
                     this.clearAndInit();
                 }
         ).dimensions(x, y, width, height)
@@ -418,7 +486,9 @@ public class VulkanPlusConfigScreen extends Screen {
     }
 
     private void selectPreset(Preset preset) {
+        VulkanPlusConfig prev = ConfigManager.getConfig().copy();
         configCopy.applyPreset(preset);
+        applyConfigChanges(prev, configCopy, this.client);
         this.clearAndInit();
     }
 
@@ -446,16 +516,6 @@ public class VulkanPlusConfigScreen extends Screen {
 
     private Text toggleText(String label, boolean value) {
         return Text.literal(label + ": " + (value ? "§aON" : "§cOFF"));
-    }
-
-    private Text foliageDensityText(int density) {
-        String color = switch (density) {
-            case 100 -> "§a";
-            case 75 -> "§b";
-            case 50 -> "§e";
-            default -> "§c";
-        };
-        return Text.literal("Foliage Density: " + color + density + "%");
     }
 
     private Text presentModeText(String mode) {
@@ -486,6 +546,8 @@ public class VulkanPlusConfigScreen extends Screen {
 
     @Override
     public void close() {
+        VulkanPlusConfig prevConfig = ConfigManager.getConfig().copy();
+        applyConfigChanges(prevConfig, configCopy, this.client);
         if (this.client != null) {
             this.client.setScreen(parent);
         }

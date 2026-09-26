@@ -7,13 +7,20 @@ import net.vulkanplus.VulkanPlusMod;
  * Probes the runtime environment to detect VulkanMod and instantiate the appropriate bridge.
  */
 public class VulkanDetector {
-    private static RenderEngineBridge activeBridge;
+    private static volatile RenderEngineBridge activeBridge;
 
-    public static synchronized RenderEngineBridge getBridge() {
-        if (activeBridge == null) {
-            initBridge();
+    public static RenderEngineBridge getBridge() {
+        RenderEngineBridge bridge = activeBridge;
+        if (bridge == null) {
+            synchronized (VulkanDetector.class) {
+                bridge = activeBridge;
+                if (bridge == null) {
+                    initBridge();
+                    bridge = activeBridge;
+                }
+            }
         }
-        return activeBridge;
+        return bridge;
     }
 
     public static boolean isVulkanModLoaded() {

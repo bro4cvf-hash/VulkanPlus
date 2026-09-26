@@ -3,8 +3,11 @@ package net.vulkanplus.mixin.culling;
 import net.fabricmc.fabric.api.util.TriState;
 import net.minecraft.block.BlockState;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.util.math.Direction;
 import net.vulkanmod.render.chunk.build.frapi.mesh.MutableQuadViewImpl;
 import net.vulkanmod.render.chunk.build.frapi.render.AbstractBlockRenderContext;
+import net.vulkanmod.render.chunk.build.light.LightPipeline;
+import net.vulkanmod.render.chunk.build.light.data.QuadLightData;
 import net.vulkanmod.render.chunk.build.renderer.BlockRenderer;
 import net.vulkanplus.config.ConfigManager;
 import net.vulkanplus.config.VulkanPlusConfig;
@@ -51,12 +54,15 @@ public abstract class VulkanBlockRendererMixin extends AbstractBlockRenderContex
             return;
         }
 
-        if (config.enableFastFoliage || config.shitFoliage) {
-            this.vulkanplus$isCrossFoliage = FoliageCuller.isFoliageOrPlant(state);
-        }
-        if (config.shitFoliage && FoliageCuller.isFoliageOrPlant(state)) {
+        if ((config.enableFastFoliage || config.shitFoliage) && FoliageCuller.isFoliageOrPlant(state)) {
+            this.vulkanplus$isCrossFoliage = true;
             this.vulkanplus$forceFlatFoliageLighting = true;
             this.defaultAO = false;
+            this.useAO = false;
+        } else if (config.fullBright) {
+            this.vulkanplus$forceFlatFoliageLighting = true;
+            this.defaultAO = false;
+            this.useAO = false;
         }
     }
 
@@ -81,11 +87,49 @@ public abstract class VulkanBlockRendererMixin extends AbstractBlockRenderContex
             }
         }
 
-        if (this.vulkanplus$forceFlatFoliageLighting && quad != null) {
+        if ((this.vulkanplus$forceFlatFoliageLighting || config.fullBright) && quad != null) {
             this.useAO = false;
             this.defaultAO = false;
             quad.ambientOcclusion(TriState.FALSE);
         }
+    }
+
+    @Override
+    protected void shadeQuad(MutableQuadViewImpl quad, LightPipeline lightPipeline, boolean emissive, boolean vanillaShade) {
+        VulkanPlusConfig config = ConfigManager.getConfig();
+        if (config != null && config.enabled && config.fullBright && quad != null) {
+            float shade = 1.0f;
+            if (quad.diffuseShade()) {
+                Direction face = quad.lightFace();
+                if (face != null) {
+                    shade = switch (face) {
+                        case DOWN -> 0.5f;
+                        case UP -> 1.0f;
+                        case NORTH, SOUTH -> 0.8f;
+                        case WEST, EAST -> 0.6f;
+                    };
+                }
+            }
+            QuadLightData data = this.quadLightData;
+            for (int i = 0; i < 4; ++i) {
+                if (shade != 1.0f) {
+                    quad.color(i, vulkanplus$multiplyRGB(quad.color(i), shade));
+                }
+                data.br[i] = shade;
+                data.lm[i] = 0xF000F0;
+            }
+            return;
+        }
+        super.shadeQuad(quad, lightPipeline, emissive, vanillaShade);
+    }
+
+    @Unique
+    private static int vulkanplus$multiplyRGB(int color, float shade) {
+        int a = color & 0xFF000000;
+        int r = (int) (((color >>> 16) & 0xFF) * shade);
+        int g = (int) (((color >>> 8) & 0xFF) * shade);
+        int b = (int) ((color & 0xFF) * shade);
+        return a | (r << 16) | (g << 8) | b;
     }
 
     @Inject(method = "renderBlock", at = @At("RETURN"))

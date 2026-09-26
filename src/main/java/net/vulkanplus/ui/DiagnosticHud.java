@@ -37,6 +37,9 @@ public class DiagnosticHud {
     private boolean liveMetricsDirty = false;
 
     private final String[] cachedLines = new String[5];
+    private final StringBuilder lineBuilder = new StringBuilder(96);
+    private String cachedFpsOverlayText = "0 FPS";
+    private int lastOverlayFpsValue = -1;
     private boolean linesDirty = true;
     private boolean lastEnabledState = false;
     private Object lastPresetState = null;
@@ -44,11 +47,52 @@ public class DiagnosticHud {
 
     private long lastFrameTimeNanos = System.nanoTime();
     private long lastRecalculateTimeNanos = 0;
+    private boolean frameRecordedThisPass = false;
 
     private float currentFps = 0.0f;
     private float averageFps = 0.0f;
     private float onePercentLowFps = 0.0f;
     private float pointOnePercentLowFps = 0.0f;
+
+    /**
+     * Called once per 3D world frame (even when Exordium throttles InGameHud.render)
+     * so 3D frame deltas and 1% / 0.1% lows never freeze at the HUD target framerate.
+     */
+    public void onFrameTick() {
+        onFrameAt(System.nanoTime());
+        frameRecordedThisPass = true;
+    }
+
+    /**
+     * Called during the HUD render callback; records a frame sample only if
+     * {@link #onFrameTick()} did not already record the current 3D render pass.
+     */
+    public void onHudRenderPass() {
+        if (frameRecordedThisPass) {
+            frameRecordedThisPass = false;
+            return;
+        }
+        onFrameAt(System.nanoTime());
+    }
+
+    /**
+     * Decoupled 3D frame delta recorder that accepts an explicit frame delta in nanoseconds.
+     */
+    public void recordFrameTime(long frameDeltaNs) {
+        if (frameDeltaNs <= 0) return;
+        long now = lastFrameTimeNanos + frameDeltaNs;
+        lastFrameTimeNanos = now;
+        appendLiveSample(frameDeltaNs, now);
+        currentFps = 1_000_000_000.0f / frameDeltaNs;
+        if (lastRecalculateTimeNanos == 0
+                || now - lastRecalculateTimeNanos >= RECALCULATE_INTERVAL_NANOS
+                || now < lastRecalculateTimeNanos) {
+            recalculateLiveMetrics();
+            lastRecalculateTimeNanos = now;
+        } else {
+            liveMetricsDirty = true;
+        }
+    }
 
     public void onFrame() {
         onFrameAt(System.nanoTime());
@@ -177,31 +221,81 @@ public class DiagnosticHud {
         linesDirty = true;
     }
 
+    private static void appendOneDecimal(StringBuilder sb, float value) {
+        if (Float.isNaN(value) || Float.isInfinite(value) || value < 0.0f) {
+            sb.append("0.0");
+            return;
+        }
+        int scaled = Math.round(value * 10.0f);
+        sb.append(scaled / 10).append('.').append(scaled % 10);
+    }
+
+    public String getFormattedFpsOverlay(int fps) {
+        if (fps != lastOverlayFpsValue) {
+            lastOverlayFpsValue = fps;
+            lineBuilder.setLength(0);
+            lineBuilder.append(fps).append(" FPS");
+            cachedFpsOverlayText = lineBuilder.toString();
+        }
+        return cachedFpsOverlayText;
+    }
+
     public String[] getDiagnosticsLines() {
         VulkanPlusConfig config = ConfigManager.getConfig();
+        if (config == null) {
+            config = new VulkanPlusConfig();
+        }
+        String presentModeDisplay = config.presentMode != null ? config.presentMode : "MAILBOX";
         boolean configChanged = (config.enabled != lastEnabledState)
                 || (config.activePreset != lastPresetState)
-                || !java.util.Objects.equals(config.presentMode, lastPresentModeState);
+                || !java.util.Objects.equals(presentModeDisplay, lastPresentModeState);
 
         if (linesDirty || configChanged || cachedLines[0] == null) {
-            long vramUsedMb = VulkanDetector.getBridge().getVramUsed() / (1024 * 1024);
-            long vramAllocMb = VulkanDetector.getBridge().getVramAllocated() / (1024 * 1024);
+            var bridge = VulkanDetector.getBridge();
+            long vramUsedMb = bridge != null ? Math.max(0L, bridge.getVramUsed()) / (1024 * 1024) : 0L;
+            long vramAllocMb = bridge != null ? Math.max(0L, bridge.getVramAllocated()) / (1024 * 1024) : 0L;
+            String engineName = (bridge != null && bridge.getEngineName() != null) ? bridge.getEngineName() : "Unknown";
             String presetDisplay = config.activePreset != null ? config.activePreset.getDisplayName() : "Custom";
 
-            cachedLines[0] = String.format("Vulkan Plus [1.21.11] - %s [%s]",
-                    VulkanDetector.getBridge().getEngineName(), config.enabled ? "ACTIVE" : "PAUSED");
-            cachedLines[1] = String.format("FPS: %.1f | Avg: %.1f | 1%% Low: %.1f | 0.1%% Low: %.1f",
-                    currentFps, averageFps, onePercentLowFps, pointOnePercentLowFps);
-            cachedLines[2] = String.format("VRAM: %d MB / %d MB", vramUsedMb, vramAllocMb);
-            cachedLines[3] = String.format("Culled: %d entities | %d particles",
-                    RenderOptimizer.getFrustumCuller().getCulledEntitiesCount(),
-                    RenderOptimizer.getParticleCuller().getCulledParticleCount());
-            cachedLines[4] = String.format("Preset: %s | Present: %s",
-                    presetDisplay, config.presentMode);
+            lineBuilder.setLength(0);
+            lineBuilder.append("Vulkan Plus [1.21.11] - ")
+                    .append(engineName)
+                    .append(" [").append(config.enabled ? "ACTIVE" : "PAUSED").append(']');
+            cachedLines[0] = lineBuilder.toString();
+
+            lineBuilder.setLength(0);
+            lineBuilder.append("FPS: ");
+            appendOneDecimal(lineBuilder, currentFps);
+            lineBuilder.append(" | Avg: ");
+            appendOneDecimal(lineBuilder, averageFps);
+            lineBuilder.append(" | 1% Low: ");
+            appendOneDecimal(lineBuilder, onePercentLowFps);
+            lineBuilder.append(" | 0.1% Low: ");
+            appendOneDecimal(lineBuilder, pointOnePercentLowFps);
+            cachedLines[1] = lineBuilder.toString();
+
+            lineBuilder.setLength(0);
+            lineBuilder.append("VRAM: ").append(vramUsedMb).append(" MB / ").append(vramAllocMb).append(" MB");
+            cachedLines[2] = lineBuilder.toString();
+
+            long culledEntities = RenderOptimizer.getFrustumCuller() != null
+                    ? RenderOptimizer.getFrustumCuller().getCulledEntitiesCount() : 0L;
+            long culledParticles = RenderOptimizer.getParticleCuller() != null
+                    ? RenderOptimizer.getParticleCuller().getCulledParticleCount() : 0L;
+
+            lineBuilder.setLength(0);
+            lineBuilder.append("Culled: ").append(culledEntities)
+                    .append(" entities | ").append(culledParticles)
+                    .append(" particles");
+            cachedLines[3] = lineBuilder.toString();
+
+            lineBuilder.setLength(0);
+            lineBuilder.append("Preset: ").append(presetDisplay).append(" | Present: ").append(presentModeDisplay);
+            cachedLines[4] = lineBuilder.toString();
 
             lastEnabledState = config.enabled;
             lastPresetState = config.activePreset;
-            lastPresentModeState = config.presentMode;
+            lastPresentModeState = presentModeDisplay;
             linesDirty = false;
         }
         return cachedLines;
@@ -266,6 +360,7 @@ public class DiagnosticHud {
         pointOnePercentLowFps = 0.0f;
         lastFrameTimeNanos = System.nanoTime();
         lastRecalculateTimeNanos = 0;
+        frameRecordedThisPass = false;
         linesDirty = true;
         Arrays.fill(frameTimesNanos, 0);
         Arrays.fill(sortBuffer, 0);

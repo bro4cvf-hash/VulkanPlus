@@ -87,7 +87,8 @@ public final class FoliageCuller {
 
     public static volatile long culledFoliageBlocks = 0;
     public static volatile long culledFoliageQuads = 0;
-    public static volatile long culledStackedPlantFaces = 0;
+    public static final java.util.concurrent.atomic.LongAdder culledStackedPlantFaces = new java.util.concurrent.atomic.LongAdder();
+    private static final java.util.Map<String, String> NORMALIZED_CACHE = new java.util.concurrent.ConcurrentHashMap<>(128);
 
     private static final Set<String> GAMEPLAY_PLANT_NAMES = Set.of(
             "SugarCaneBlock", "sugar_cane", "minecraft:sugar_cane",
@@ -175,7 +176,11 @@ public final class FoliageCuller {
     public static void resetStats() {
         culledFoliageBlocks = 0;
         culledFoliageQuads = 0;
-        culledStackedPlantFaces = 0;
+        culledStackedPlantFaces.reset();
+    }
+
+    public static long getCulledStackedPlantFaces() {
+        return culledStackedPlantFaces.sum();
     }
 
     public static void updateCameraPosition(double x, double y, double z) {
@@ -219,6 +224,10 @@ public final class FoliageCuller {
 
     private static String normalizeName(String rawName) {
         if (rawName == null || rawName.isEmpty()) return "";
+        return NORMALIZED_CACHE.computeIfAbsent(rawName, FoliageCuller::doNormalizeName);
+    }
+
+    private static String doNormalizeName(String rawName) {
         String trimmed = rawName.trim();
         int dot = trimmed.lastIndexOf('.');
         if (dot >= 0 && dot + 1 < trimmed.length()) {
@@ -255,29 +264,138 @@ public final class FoliageCuller {
                 || lower.contains("kelp");
     }
 
+    private static final int FLAG_GAMEPLAY = 1;
+    private static final int FLAG_DECORATIVE = 1 << 1;
+    private static final int FLAG_STACKED_FLUSH = 1 << 2;
+    private static final int FLAG_CROSS_MODEL = 1 << 3;
+    private static final int FLAG_TWO_BLOCK_TALL = 1 << 4;
+
+    private static final ClassValue<Integer> BLOCK_CLASS_FLAGS = new ClassValue<>() {
+        @Override
+        protected Integer computeValue(Class<?> type) {
+            if (type == Block.class) {
+                return 0;
+            }
+            String simpleName = type.getSimpleName();
+            int flags = 0;
+            if ( SugarCaneBlock.class.isAssignableFrom(type)
+                    || VineBlock.class.isAssignableFrom(type)
+                    || SweetBerryBushBlock.class.isAssignableFrom(type)
+                    || WitherRoseBlock.class.isAssignableFrom(type)
+                    || BambooBlock.class.isAssignableFrom(type)
+                    || CropBlock.class.isAssignableFrom(type)
+                    || PitcherCropBlock.class.isAssignableFrom(type)
+                    || NetherWartBlock.class.isAssignableFrom(type)
+                    || StemBlock.class.isAssignableFrom(type)
+                    || AttachedStemBlock.class.isAssignableFrom(type)
+                    || AzaleaBlock.class.isAssignableFrom(type)
+                    || LilyPadBlock.class.isAssignableFrom(type)
+                    || SeaPickleBlock.class.isAssignableFrom(type)
+                    || SmallDripleafBlock.class.isAssignableFrom(type)
+                    || SaplingBlock.class.isAssignableFrom(type)
+                    || MangroveRootsBlock.class.isAssignableFrom(type)
+                    || KelpBlock.class.isAssignableFrom(type)
+                    || KelpPlantBlock.class.isAssignableFrom(type)
+                    || isGameplayPlant(simpleName)) {
+                flags |= FLAG_GAMEPLAY;
+            }
+            if ((flags & FLAG_GAMEPLAY) == 0 && (
+                    DryVegetationBlock.class.isAssignableFrom(type)
+                    || ShortDryGrassBlock.class.isAssignableFrom(type)
+                    || TallDryGrassBlock.class.isAssignableFrom(type)
+                    || BushBlock.class.isAssignableFrom(type)
+                    || FireflyBushBlock.class.isAssignableFrom(type)
+                    || CactusFlowerBlock.class.isAssignableFrom(type)
+                    || LeafLitterBlock.class.isAssignableFrom(type)
+                    || FlowerbedBlock.class.isAssignableFrom(type)
+                    || HangingMossBlock.class.isAssignableFrom(type)
+                    || PaleMossCarpetBlock.class.isAssignableFrom(type)
+                    || EyeblossomBlock.class.isAssignableFrom(type)
+                    || ShortPlantBlock.class.isAssignableFrom(type)
+                    || TallPlantBlock.class.isAssignableFrom(type)
+                    || TallFlowerBlock.class.isAssignableFrom(type)
+                    || SeagrassBlock.class.isAssignableFrom(type)
+                    || TallSeagrassBlock.class.isAssignableFrom(type)
+                    || FlowerBlock.class.isAssignableFrom(type)
+                    || RootsBlock.class.isAssignableFrom(type)
+                    || SproutsBlock.class.isAssignableFrom(type)
+                    || FungusBlock.class.isAssignableFrom(type)
+                    || MushroomPlantBlock.class.isAssignableFrom(type)
+                    || isDecorativeClutter(simpleName))) {
+                flags |= FLAG_DECORATIVE;
+            }
+            if (SugarCaneBlock.class.isAssignableFrom(type)
+                    || BambooBlock.class.isAssignableFrom(type)
+                    || KelpBlock.class.isAssignableFrom(type)
+                    || KelpPlantBlock.class.isAssignableFrom(type)
+                    || VineBlock.class.isAssignableFrom(type)
+                    || MangroveRootsBlock.class.isAssignableFrom(type)
+                    || LeafLitterBlock.class.isAssignableFrom(type)
+                    || PaleMossCarpetBlock.class.isAssignableFrom(type)
+                    || FlowerbedBlock.class.isAssignableFrom(type)
+                    || HangingMossBlock.class.isAssignableFrom(type)
+                    || isStackedOrFlushPlant(simpleName)) {
+                flags |= FLAG_STACKED_FLUSH;
+            }
+            if (!LeafLitterBlock.class.isAssignableFrom(type)
+                    && !PaleMossCarpetBlock.class.isAssignableFrom(type)
+                    && !FlowerbedBlock.class.isAssignableFrom(type)
+                    && !MangroveRootsBlock.class.isAssignableFrom(type)
+                    && !BambooBlock.class.isAssignableFrom(type)
+                    && !CropBlock.class.isAssignableFrom(type)
+                    && !PitcherCropBlock.class.isAssignableFrom(type)
+                    && !NetherWartBlock.class.isAssignableFrom(type)
+                    && !StemBlock.class.isAssignableFrom(type)
+                    && !AttachedStemBlock.class.isAssignableFrom(type)
+                    && !AzaleaBlock.class.isAssignableFrom(type)
+                    && !LilyPadBlock.class.isAssignableFrom(type)
+                    && !SeaPickleBlock.class.isAssignableFrom(type)
+                    && !SmallDripleafBlock.class.isAssignableFrom(type)
+                    && (DryVegetationBlock.class.isAssignableFrom(type)
+                        || ShortDryGrassBlock.class.isAssignableFrom(type)
+                        || TallDryGrassBlock.class.isAssignableFrom(type)
+                        || BushBlock.class.isAssignableFrom(type)
+                        || FireflyBushBlock.class.isAssignableFrom(type)
+                        || CactusFlowerBlock.class.isAssignableFrom(type)
+                        || HangingMossBlock.class.isAssignableFrom(type)
+                        || EyeblossomBlock.class.isAssignableFrom(type)
+                        || ShortPlantBlock.class.isAssignableFrom(type)
+                        || TallPlantBlock.class.isAssignableFrom(type)
+                        || TallFlowerBlock.class.isAssignableFrom(type)
+                        || SugarCaneBlock.class.isAssignableFrom(type)
+                        || VineBlock.class.isAssignableFrom(type)
+                        || KelpBlock.class.isAssignableFrom(type)
+                        || KelpPlantBlock.class.isAssignableFrom(type)
+                        || AbstractPlantPartBlock.class.isAssignableFrom(type)
+                        || SeagrassBlock.class.isAssignableFrom(type)
+                        || TallSeagrassBlock.class.isAssignableFrom(type)
+                        || FlowerBlock.class.isAssignableFrom(type)
+                        || WitherRoseBlock.class.isAssignableFrom(type)
+                        || SaplingBlock.class.isAssignableFrom(type)
+                        || SweetBerryBushBlock.class.isAssignableFrom(type)
+                        || RootsBlock.class.isAssignableFrom(type)
+                        || SproutsBlock.class.isAssignableFrom(type)
+                        || FungusBlock.class.isAssignableFrom(type)
+                        || MushroomPlantBlock.class.isAssignableFrom(type)
+                        || isCrossModelPlant(simpleName))) {
+                flags |= FLAG_CROSS_MODEL;
+            }
+            if (!PitcherCropBlock.class.isAssignableFrom(type)
+                    && !SmallDripleafBlock.class.isAssignableFrom(type)
+                    && (TallPlantBlock.class.isAssignableFrom(type)
+                        || TallFlowerBlock.class.isAssignableFrom(type)
+                        || TallDryGrassBlock.class.isAssignableFrom(type)
+                        || TallSeagrassBlock.class.isAssignableFrom(type)
+                        || isTwoBlockTallPlant(simpleName))) {
+                flags |= FLAG_TWO_BLOCK_TALL;
+            }
+            return flags;
+        }
+    };
+
     public static boolean isGameplayPlant(Block block) {
         if (block == null) return false;
-        if (block instanceof SugarCaneBlock
-                || block instanceof VineBlock
-                || block instanceof SweetBerryBushBlock
-                || block instanceof WitherRoseBlock
-                || block instanceof BambooBlock
-                || block instanceof CropBlock
-                || block instanceof PitcherCropBlock
-                || block instanceof NetherWartBlock
-                || block instanceof StemBlock
-                || block instanceof AttachedStemBlock
-                || block instanceof AzaleaBlock
-                || block instanceof LilyPadBlock
-                || block instanceof SeaPickleBlock
-                || block instanceof SmallDripleafBlock
-                || block instanceof SaplingBlock
-                || block instanceof MangroveRootsBlock
-                || block instanceof KelpBlock
-                || block instanceof KelpPlantBlock) {
-            return true;
-        }
-        return isGameplayPlant(block.getClass().getSimpleName());
+        return (BLOCK_CLASS_FLAGS.get(block.getClass()) & FLAG_GAMEPLAY) != 0;
     }
 
     public static boolean isGameplayPlant(BlockState state) {
@@ -315,33 +433,8 @@ public final class FoliageCuller {
     }
 
     public static boolean isDecorativeClutter(Block block) {
-        if (block == null || isGameplayPlant(block)) {
-            return false;
-        }
-        if (block instanceof DryVegetationBlock
-                || block instanceof ShortDryGrassBlock
-                || block instanceof TallDryGrassBlock
-                || block instanceof BushBlock
-                || block instanceof FireflyBushBlock
-                || block instanceof CactusFlowerBlock
-                || block instanceof LeafLitterBlock
-                || block instanceof FlowerbedBlock
-                || block instanceof HangingMossBlock
-                || block instanceof PaleMossCarpetBlock
-                || block instanceof EyeblossomBlock
-                || block instanceof ShortPlantBlock
-                || block instanceof TallPlantBlock
-                || block instanceof TallFlowerBlock
-                || block instanceof SeagrassBlock
-                || block instanceof TallSeagrassBlock
-                || block instanceof FlowerBlock
-                || block instanceof RootsBlock
-                || block instanceof SproutsBlock
-                || block instanceof FungusBlock
-                || block instanceof MushroomPlantBlock) {
-            return true;
-        }
-        return isDecorativeClutter(block.getClass().getSimpleName());
+        if (block == null) return false;
+        return (BLOCK_CLASS_FLAGS.get(block.getClass()) & FLAG_DECORATIVE) != 0;
     }
 
     public static boolean isDecorativeClutter(BlockState state) {
@@ -362,12 +455,8 @@ public final class FoliageCuller {
     }
 
     public static boolean isTwoBlockTallPlant(Block block) {
-        if (block == null || block instanceof PitcherCropBlock || block instanceof SmallDripleafBlock) return false;
-        return block instanceof TallPlantBlock
-                || block instanceof TallFlowerBlock
-                || block instanceof TallDryGrassBlock
-                || block instanceof TallSeagrassBlock
-                || isTwoBlockTallPlant(block.getClass().getSimpleName());
+        if (block == null) return false;
+        return (BLOCK_CLASS_FLAGS.get(block.getClass()) & FLAG_TWO_BLOCK_TALL) != 0;
     }
 
     public static boolean isTwoBlockTallPlant(BlockState state) {
@@ -404,51 +493,7 @@ public final class FoliageCuller {
 
     public static boolean isCrossModelPlant(Block block) {
         if (block == null) return false;
-        if (block instanceof LeafLitterBlock
-                || block instanceof PaleMossCarpetBlock
-                || block instanceof FlowerbedBlock
-                || block instanceof MangroveRootsBlock
-                || block instanceof BambooBlock
-                || block instanceof CropBlock
-                || block instanceof PitcherCropBlock
-                || block instanceof NetherWartBlock
-                || block instanceof StemBlock
-                || block instanceof AttachedStemBlock
-                || block instanceof AzaleaBlock
-                || block instanceof LilyPadBlock
-                || block instanceof SeaPickleBlock
-                || block instanceof SmallDripleafBlock) {
-            return false;
-        }
-        if (block instanceof DryVegetationBlock
-                || block instanceof ShortDryGrassBlock
-                || block instanceof TallDryGrassBlock
-                || block instanceof BushBlock
-                || block instanceof FireflyBushBlock
-                || block instanceof CactusFlowerBlock
-                || block instanceof HangingMossBlock
-                || block instanceof EyeblossomBlock
-                || block instanceof ShortPlantBlock
-                || block instanceof TallPlantBlock
-                || block instanceof TallFlowerBlock
-                || block instanceof SugarCaneBlock
-                || block instanceof VineBlock
-                || block instanceof KelpBlock
-                || block instanceof KelpPlantBlock
-                || block instanceof AbstractPlantPartBlock
-                || block instanceof SeagrassBlock
-                || block instanceof TallSeagrassBlock
-                || block instanceof FlowerBlock
-                || block instanceof WitherRoseBlock
-                || block instanceof SaplingBlock
-                || block instanceof SweetBerryBushBlock
-                || block instanceof RootsBlock
-                || block instanceof SproutsBlock
-                || block instanceof FungusBlock
-                || block instanceof MushroomPlantBlock) {
-            return true;
-        }
-        return isCrossModelPlant(block.getClass().getSimpleName());
+        return (BLOCK_CLASS_FLAGS.get(block.getClass()) & FLAG_CROSS_MODEL) != 0;
     }
 
     public static boolean isCrossModelPlant(BlockState state) {
@@ -462,6 +507,16 @@ public final class FoliageCuller {
     public static boolean isCustom3DQuad(Direction cullFace, Direction nominalFace) {
         if (cullFace != null) {
             return true;
+        }
+        return nominalFace != null && nominalFace.getAxis().isVertical();
+    }
+
+    public static boolean isCustom3DQuad(Block block, Direction cullFace, Direction nominalFace) {
+        if (cullFace != null) {
+            return true;
+        }
+        if (block instanceof VineBlock) {
+            return false;
         }
         return nominalFace != null && nominalFace.getAxis().isVertical();
     }
@@ -488,7 +543,17 @@ public final class FoliageCuller {
         if (norm.equals("LeafLitterBlock") || norm.equals("leaf_litter")
                 || norm.equals("FlowerbedBlock") || norm.equals("pink_petals") || norm.equals("wildflowers")
                 || norm.equals("PaleMossCarpetBlock") || norm.equals("pale_moss_carpet")) {
-            culledStackedPlantFaces++;
+            culledStackedPlantFaces.increment();
+            return true;
+        }
+        return false;
+    }
+
+    public static boolean shouldCullFlushBottomQuad(Block block, Direction nominalFace, boolean enableFastFoliage, boolean shitFoliage) {
+        if (!enableFastFoliage && !shitFoliage) return false;
+        if (block == null || nominalFace != Direction.DOWN) return false;
+        if (block instanceof LeafLitterBlock || block instanceof FlowerbedBlock || block instanceof PaleMossCarpetBlock) {
+            culledStackedPlantFaces.increment();
             return true;
         }
         return false;
@@ -497,12 +562,7 @@ public final class FoliageCuller {
     public static boolean shouldCullFlushBottomQuad(BlockState state, Direction nominalFace, boolean enableFastFoliage, boolean shitFoliage) {
         if (!enableFastFoliage && !shitFoliage) return false;
         if (state == null || nominalFace != Direction.DOWN) return false;
-        Block block = state.getBlock();
-        if (block instanceof LeafLitterBlock || block instanceof FlowerbedBlock || block instanceof PaleMossCarpetBlock) {
-            culledStackedPlantFaces++;
-            return true;
-        }
-        return shouldCullFlushBottomQuad(block.getClass().getSimpleName(), nominalFace, enableFastFoliage, shitFoliage);
+        return shouldCullFlushBottomQuad(state.getBlock(), nominalFace, enableFastFoliage, shitFoliage);
     }
 
     /**
@@ -514,12 +574,11 @@ public final class FoliageCuller {
      * - FlowerbedBlock vertical cross-stem quads (top UP petal quads are preserved via isCustom3DQuad)
      * - MangroveRootsBlock internal unculled cross-plane quads (outer 6 cube shell faces have cullFace != null and are preserved via isCustom3DQuad)
      */
-    public static boolean shouldReduceCrossQuad(BlockState state, Direction cullFace, Direction nominalFace, int tintIndex) {
-        if (state == null) return false;
-        if (isCustom3DQuad(state, cullFace, nominalFace)) {
+    public static boolean shouldReduceCrossQuad(Block block, Direction cullFace, Direction nominalFace, int tintIndex) {
+        if (block == null) return false;
+        if (isCustom3DQuad(block, cullFace, nominalFace)) {
             return false;
         }
-        Block block = state.getBlock();
         if (block instanceof BambooBlock) {
             return tintIndex >= 0;
         }
@@ -527,6 +586,11 @@ public final class FoliageCuller {
             return true;
         }
         return isCrossModelPlant(block);
+    }
+
+    public static boolean shouldReduceCrossQuad(BlockState state, Direction cullFace, Direction nominalFace, int tintIndex) {
+        if (state == null) return false;
+        return shouldReduceCrossQuad(state.getBlock(), cullFace, nominalFace, tintIndex);
     }
 
     public static boolean isCustom3DModel(List<BlockModelPart> parts) {
@@ -564,17 +628,7 @@ public final class FoliageCuller {
 
     public static boolean isStackedOrFlushPlant(Block block) {
         if (block == null) return false;
-        return block instanceof SugarCaneBlock
-                || block instanceof BambooBlock
-                || block instanceof KelpBlock
-                || block instanceof KelpPlantBlock
-                || block instanceof VineBlock
-                || block instanceof MangroveRootsBlock
-                || block instanceof LeafLitterBlock
-                || block instanceof PaleMossCarpetBlock
-                || block instanceof FlowerbedBlock
-                || block instanceof HangingMossBlock
-                || isStackedOrFlushPlant(block.getClass().getSimpleName());
+        return (BLOCK_CLASS_FLAGS.get(block.getClass()) & FLAG_STACKED_FLUSH) != 0;
     }
 
     public static boolean isStackedOrFlushPlant(BlockState state) {
@@ -589,7 +643,8 @@ public final class FoliageCuller {
     }
 
     public static boolean isFoliageOrPlant(Block block) {
-        return isDecorativeClutter(block) || isGameplayPlant(block) || isStackedOrFlushPlant(block);
+        if (block == null) return false;
+        return (BLOCK_CLASS_FLAGS.get(block.getClass()) & (FLAG_DECORATIVE | FLAG_GAMEPLAY | FLAG_STACKED_FLUSH)) != 0;
     }
 
     public static boolean isFoliageOrPlant(BlockState state) {
@@ -665,15 +720,24 @@ public final class FoliageCuller {
         return shouldEmitCrossQuad(quadIndex, enableFastFoliage, shitFoliage);
     }
 
-    public static boolean shouldEmitCrossQuad(BlockState state, int quadIndex, boolean enableFastFoliage, boolean shitFoliage) {
+    public static boolean shouldEmitCrossQuad(Block block, int quadIndex, boolean enableFastFoliage, boolean shitFoliage) {
         if (quadIndex < 0) return false;
         if (!enableFastFoliage && !shitFoliage) return true;
-        if (state != null && state.getBlock() instanceof VineBlock) {
-            boolean emit = (quadIndex % 2) == 1;
+        if (block instanceof VineBlock) {
+            boolean emit = (quadIndex & 1) == 1;
             if (!emit) {
                 culledFoliageQuads++;
             }
             return emit;
+        }
+        return shouldEmitCrossQuad(quadIndex, enableFastFoliage, shitFoliage);
+    }
+
+    public static boolean shouldEmitCrossQuad(BlockState state, int quadIndex, boolean enableFastFoliage, boolean shitFoliage) {
+        if (quadIndex < 0) return false;
+        if (!enableFastFoliage && !shitFoliage) return true;
+        if (state != null) {
+            return shouldEmitCrossQuad(state.getBlock(), quadIndex, enableFastFoliage, shitFoliage);
         }
         return shouldEmitCrossQuad(quadIndex, enableFastFoliage, shitFoliage);
     }
@@ -696,7 +760,7 @@ public final class FoliageCuller {
         h = ((h >>> 16) ^ h) * 0x45d9f3b;
         h = ((h >>> 16) ^ h) * 0x45d9f3b;
         h = (h >>> 16) ^ h;
-        return Math.floorMod(h, 100);
+        return (int) (((h & 0xFFFFFFFFL) * 100L) >>> 32);
     }
 
     public static int getEffectiveDensity(int configuredDensity, boolean shitFoliage) {
@@ -725,6 +789,25 @@ public final class FoliageCuller {
         return computeXzDensityBucket(x, z) < effectiveDensity;
     }
 
+    public static boolean shouldRenderByDensity(Block block, int x, int y, int z, int foliageDensity, boolean shitFoliage) {
+        if (block == null || isGameplayPlant(block) || !isDecorativeClutter(block)) {
+            return true;
+        }
+        int effectiveDensity = getEffectiveDensity(foliageDensity, shitFoliage);
+        if (effectiveDensity >= 100) {
+            return true;
+        }
+        if (effectiveDensity <= 0) {
+            return false;
+        }
+        return computeXzDensityBucket(x, z) < effectiveDensity;
+    }
+
+    public static boolean shouldRenderByDensity(BlockState state, int x, int y, int z, int foliageDensity, boolean shitFoliage) {
+        if (state == null) return true;
+        return shouldRenderByDensity(state.getBlock(), x, y, z, foliageDensity, shitFoliage);
+    }
+
     /**
      * Evaluates distance culling in shitFoliage mode (24 blocks from camera).
      * Uses horizontal (x, z) distance so 2-block tall plants never split at the 24-block boundary.
@@ -742,6 +825,23 @@ public final class FoliageCuller {
         double dz = (blockZ + 0.5) - camZ;
         double horizDistSq = dx * dx + dz * dz;
         return horizDistSq <= SHIT_FOLIAGE_MAX_DISTANCE_SQ;
+    }
+
+    public static boolean shouldRenderByDistance(Block block, double blockX, double blockY, double blockZ,
+                                                 double camX, double camY, double camZ, boolean shitFoliage) {
+        if (!shitFoliage || block == null || isGameplayPlant(block) || !isDecorativeClutter(block)) {
+            return true;
+        }
+        double dx = (blockX + 0.5) - camX;
+        double dz = (blockZ + 0.5) - camZ;
+        double horizDistSq = dx * dx + dz * dz;
+        return horizDistSq <= SHIT_FOLIAGE_MAX_DISTANCE_SQ;
+    }
+
+    public static boolean shouldRenderByDistance(BlockState state, double blockX, double blockY, double blockZ,
+                                                 double camX, double camY, double camZ, boolean shitFoliage) {
+        if (state == null) return true;
+        return shouldRenderByDistance(state.getBlock(), blockX, blockY, blockZ, camX, camY, camZ, shitFoliage);
     }
 
     /**
@@ -767,37 +867,53 @@ public final class FoliageCuller {
         return true;
     }
 
+    public static boolean shouldRenderFoliageBlock(Block block, int x, int y, int z,
+                                                   double camX, double camY, double camZ,
+                                                   boolean enableFastFoliage, int foliageDensity, boolean shitFoliage) {
+        if (block == null || isGameplayPlant(block) || !isDecorativeClutter(block)) {
+            return true;
+        }
+        if (!shouldRenderByDistance(block, x, y, z, camX, camY, camZ, shitFoliage)) {
+            culledFoliageBlocks++;
+            return false;
+        }
+        if (!shouldRenderByDensity(block, x, y, z, foliageDensity, shitFoliage)) {
+            culledFoliageBlocks++;
+            return false;
+        }
+        return true;
+    }
+
+    public static boolean shouldRenderFoliageBlock(BlockState state, int x, int y, int z,
+                                                   double camX, double camY, double camZ,
+                                                   boolean enableFastFoliage, int foliageDensity, boolean shitFoliage) {
+        if (state == null) return true;
+        return shouldRenderFoliageBlock(state.getBlock(), x, y, z, camX, camY, camZ, enableFastFoliage, foliageDensity, shitFoliage);
+    }
+
     /**
-     * Runtime visibility check used by VulkanBlockRendererMixin and BlockModelRendererMixin.
+     * Runtime visibility check used by VulkanBlockRendererMixin, SodiumBlockRendererMixin, and BlockModelRendererMixin.
+     * Never hides foliage blocks when shitFoliage is disabled so normal/Fast/Balanced/Extreme presets never have
+     * invisible foliage blocks. In ASS PC shitFoliage mode, uses zero-allocation deterministic (x, z) thinning.
      */
     public static boolean shouldRenderBlockAt(BlockState state, BlockPos pos) {
         if (state == null || pos == null) return true;
         VulkanPlusConfig config = ConfigManager.getConfig();
-        if (config == null || !config.enabled) return true;
-
-        Block block = state.getBlock();
-        if (isGameplayPlant(block) || !isDecorativeClutter(block)) {
+        if (config == null || !config.enabled || (!config.shitFoliage && config.foliageDensity >= 100)) {
             return true;
         }
 
-        if (config.shitFoliage) {
-            syncCameraFromClientIfPossible();
-            if (cameraInitialized) {
-                double dx = (pos.getX() + 0.5) - cameraX;
-                double dz = (pos.getZ() + 0.5) - cameraZ;
-                if (dx * dx + dz * dz > SHIT_FOLIAGE_MAX_DISTANCE_SQ) {
-                    culledFoliageBlocks++;
-                    return false;
-                }
-            }
+        Block block = state.getBlock();
+        if (block == null) return true;
+        int flags = BLOCK_CLASS_FLAGS.get(block.getClass());
+        if ((flags & FLAG_GAMEPLAY) != 0 || (flags & FLAG_DECORATIVE) == 0) {
+            return true;
         }
 
         int effectiveDensity = getEffectiveDensity(config.foliageDensity, config.shitFoliage);
-        if (effectiveDensity < 100) {
-            if (computeXzDensityBucket(pos.getX(), pos.getZ()) >= effectiveDensity) {
-                culledFoliageBlocks++;
-                return false;
-            }
+        if (effectiveDensity < 100 && computeXzDensityBucket(pos.getX(), pos.getZ()) >= effectiveDensity) {
+            culledFoliageBlocks++;
+            return false;
         }
 
         return true;
@@ -815,47 +931,63 @@ public final class FoliageCuller {
         }
 
         // Cull hidden bottom face when resting on an opaque full cube or identical plant
-        if (direction == Direction.DOWN && (neighborOpaqueFullCube || self.equals(neighbor))) {
-            culledStackedPlantFaces++;
+        if (direction == Direction.DOWN && (neighborOpaqueFullCube || self == neighbor || self.equals(neighbor))) {
+            culledStackedPlantFaces.increment();
             return true;
         }
 
         // Full-cube mangrove roots can cull any face shared with another mangrove root or opaque full cube
         if (self.equals("MangroveRootsBlock") || self.equals("mangrove_roots")) {
-            if (self.equals(neighbor) || neighborOpaqueFullCube) {
-                culledStackedPlantFaces++;
+            if (self == neighbor || self.equals(neighbor) || neighborOpaqueFullCube) {
+                culledStackedPlantFaces.increment();
                 return true;
             }
             return false;
         }
 
-        // Ground-flush carpets/litter (1-3 pixels tall): only DOWN and horizontal edges can be culled, NEVER UP
+        // Ground-flush carpets/litter (1-3 pixels tall): ONLY cull DOWN (handled above) or identical adjacent carpet, NEVER against opaque walls
         if (self.equals("LeafLitterBlock") || self.equals("leaf_litter")
                 || self.equals("PaleMossCarpetBlock") || self.equals("pale_moss_carpet")
                 || self.equals("FlowerbedBlock") || self.equals("pink_petals") || self.equals("wildflowers")) {
-            if (direction != Direction.UP && (self.equals(neighbor) || neighborOpaqueFullCube)) {
-                culledStackedPlantFaces++;
-                return true;
-            }
             return false;
         }
 
         // Vertical interior face culling for stacked columns (SugarCane, Bamboo, Kelp, Vine, HangingMoss)
         if (direction.getAxis().isVertical()) {
-            if (self.equals(neighbor)
+            if (self == neighbor || self.equals(neighbor)
                     || (self.startsWith("Kelp") && neighbor.startsWith("Kelp"))
                     || (self.startsWith("kelp") && neighbor.startsWith("kelp"))) {
-                culledStackedPlantFaces++;
+                culledStackedPlantFaces.increment();
                 return true;
             }
         }
 
-        // Vine face pressed directly against an opaque wall
-        if ((self.equals("VineBlock") || self.equals("vine")) && neighborOpaqueFullCube) {
-            culledStackedPlantFaces++;
+        return false;
+    }
+
+    public static boolean shouldCullPlantFace(Block selfBlock, Block neighborBlock, Direction direction, boolean neighborOpaqueFullCube) {
+        if (selfBlock == null || neighborBlock == null || direction == null) return false;
+        if (!isStackedOrFlushPlant(selfBlock)) {
+            return false;
+        }
+        if (selfBlock == neighborBlock && direction.getAxis().isVertical()) {
+            culledStackedPlantFaces.increment();
             return true;
         }
-
+        if ((selfBlock instanceof KelpBlock || selfBlock instanceof KelpPlantBlock)
+                && (neighborBlock instanceof KelpBlock || neighborBlock instanceof KelpPlantBlock)
+                && direction.getAxis().isVertical()) {
+            culledStackedPlantFaces.increment();
+            return true;
+        }
+        if (direction == Direction.DOWN && neighborOpaqueFullCube && !(selfBlock instanceof VineBlock) && !(selfBlock instanceof HangingMossBlock)) {
+            culledStackedPlantFaces.increment();
+            return true;
+        }
+        if (selfBlock instanceof MangroveRootsBlock && (selfBlock == neighborBlock || neighborOpaqueFullCube)) {
+            culledStackedPlantFaces.increment();
+            return true;
+        }
         return false;
     }
 
@@ -875,43 +1007,7 @@ public final class FoliageCuller {
             neighborOpaque = neighborState.isOpaqueFullCube();
         } catch (Throwable ignored) {
         }
-        if (direction == Direction.DOWN && (neighborOpaque || selfBlock == neighborBlock)) {
-            culledStackedPlantFaces++;
-            return true;
-        }
-        if (selfBlock instanceof MangroveRootsBlock && (selfBlock == neighborBlock || neighborOpaque)) {
-            culledStackedPlantFaces++;
-            return true;
-        }
-        if (selfBlock instanceof LeafLitterBlock
-                || selfBlock instanceof PaleMossCarpetBlock
-                || selfBlock instanceof FlowerbedBlock) {
-            if (direction != Direction.UP && (selfBlock == neighborBlock || neighborOpaque)) {
-                culledStackedPlantFaces++;
-                return true;
-            }
-            return false;
-        }
-        if (selfBlock == neighborBlock && direction.getAxis().isVertical()) {
-            culledStackedPlantFaces++;
-            return true;
-        }
-        if ((selfBlock instanceof KelpBlock || selfBlock instanceof KelpPlantBlock)
-                && (neighborBlock instanceof KelpBlock || neighborBlock instanceof KelpPlantBlock)
-                && direction.getAxis().isVertical()) {
-            culledStackedPlantFaces++;
-            return true;
-        }
-        if (selfBlock instanceof VineBlock && neighborOpaque) {
-            culledStackedPlantFaces++;
-            return true;
-        }
-        return shouldCullPlantFace(
-                selfBlock.getClass().getSimpleName(),
-                neighborBlock.getClass().getSimpleName(),
-                direction,
-                neighborOpaque
-        );
+        return shouldCullPlantFace(selfBlock, neighborBlock, direction, neighborOpaque);
     }
 
     /**
@@ -925,15 +1021,19 @@ public final class FoliageCuller {
     }
 
     /**
-     * Returns true when smooth Ambient Occlusion must be disabled (flat lighting) for foliage in shitFoliage mode.
+     * Returns true when smooth Ambient Occlusion must be disabled (flat lighting) for foliage.
      */
     public static boolean shouldForceFlatLighting(String blockName, boolean shitFoliage) {
         return shitFoliage && isFoliageOrPlant(blockName);
     }
 
+    public static boolean shouldForceFlatLighting(Block block, boolean shitFoliage) {
+        return shitFoliage && isFoliageOrPlant(block);
+    }
+
     public static boolean shouldForceFlatLighting(BlockState state) {
         if (state == null) return false;
         VulkanPlusConfig config = ConfigManager.getConfig();
-        return config != null && config.enabled && config.shitFoliage && isFoliageOrPlant(state);
+        return config != null && config.enabled && (config.enableFastFoliage || config.shitFoliage) && isFoliageOrPlant(state.getBlock());
     }
 }

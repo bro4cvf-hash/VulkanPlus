@@ -20,8 +20,18 @@ public class EntityRendererShadowMixin {
     )
     private void onUpdateShadow(Entity entity, EntityRenderState state, CallbackInfo ci) {
         VulkanPlusConfig cfg = ConfigManager.getConfig();
-        if (cfg != null && cfg.enabled && cfg.noEntityShadows) {
+        if (cfg == null || !cfg.enabled) {
+            return;
+        }
+        if (cfg.noEntityShadows) {
             ci.cancel();
+            return;
+        }
+        if (cfg.enableEntityShadowCulling && state != null) {
+            double maxDist = cfg.entityShadowMaxDistance * cfg.cullingDistanceFactor;
+            if (state.squaredDistanceToCamera > maxDist * maxDist) {
+                ci.cancel();
+            }
         }
     }
 }

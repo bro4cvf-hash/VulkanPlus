@@ -250,6 +250,14 @@ public class MixinTargetAdversarialTest {
                 "(Lorg/lwjgl/system/MemoryStack;Lorg/spongepowered/asm/mixin/injection/callback/CallbackInfo;)V");
     }
 
+    @Test
+    @DisplayName("Verify Exordium MinecraftClientMixin onReloadResources descriptor matches 1.21.11 no-arg reloadResources")
+    void testExordiumMinecraftClientMixinReloadResourcesDescriptor() throws Exception {
+        assertBytecodeMethodDescriptor("net.vulkanplus.mixin.exordium.MinecraftClientMixin",
+                "onReloadResources",
+                "(Lorg/spongepowered/asm/mixin/injection/callback/CallbackInfoReturnable;)V");
+    }
+
     private void assertBytecodeMethodDescriptor(String className, String methodName, String expectedDescriptor) throws Exception {
         String resourcePath = "/" + className.replace('.', '/') + ".class";
         try (InputStream is = getClass().getResourceAsStream(resourcePath)) {

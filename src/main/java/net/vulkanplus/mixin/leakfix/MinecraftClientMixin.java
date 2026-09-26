@@ -33,10 +33,10 @@ public abstract class MinecraftClientMixin {
     @Nullable
     public HitResult crosshairTarget;
 
-    @Inject(method = "setScreen", at = @At("HEAD"))
+    @Inject(method = "setScreen", at = @At("RETURN"))
     private void onSetScreen(Screen screen, CallbackInfo ci) {
         VulkanPlusConfig cfg = ConfigManager.getConfig();
-        if (cfg != null && cfg.enabled && cfg.enableMemoryLeakFix) {
+        if (cfg != null && cfg.enabled && cfg.enableMemoryLeakFix && screen == null) {
             this.targetedEntity = null;
             this.crosshairTarget = null;
         }

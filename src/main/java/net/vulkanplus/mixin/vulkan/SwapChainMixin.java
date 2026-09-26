@@ -5,6 +5,7 @@ import net.vulkanplus.config.ConfigManager;
 import net.vulkanplus.config.VulkanPlusConfig;
 import net.vulkanplus.vulkan.SwapchainTuning;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
@@ -17,6 +18,9 @@ import java.nio.IntBuffer;
 @Mixin(value = SwapChain.class, remap = false)
 public abstract class SwapChainMixin {
 
+    @Shadow
+    public abstract boolean isVsync();
+
     @Inject(method = "getPresentMode", at = @At("HEAD"), cancellable = true)
     private void vulkanplus$overridePresentMode(IntBuffer availablePresentModes, CallbackInfoReturnable<Integer> cir) {
         VulkanPlusConfig cfg = ConfigManager.getConfig();
@@ -25,35 +29,32 @@ public abstract class SwapChainMixin {
         }
 
         String modeStr = cfg.presentMode;
-        if (modeStr == null || "DEFAULT".equalsIgnoreCase(modeStr)) {
-            return;
-        }
+        boolean userConfigured = modeStr != null && !modeStr.trim().isEmpty() && !"DEFAULT".equalsIgnoreCase(modeStr.trim());
 
-        int desiredMode = SwapchainTuning.parsePresentMode(modeStr);
-        int limit = availablePresentModes.limit();
-        boolean hasDesired = false;
-        boolean hasMailbox = false;
-        boolean hasImmediate = false;
-        boolean hasRelaxed = false;
-
-        for (int i = 0; i < limit; i++) {
-            int m = availablePresentModes.get(i);
-            if (m == desiredMode) hasDesired = true;
-            if (m == SwapchainTuning.VK_PRESENT_MODE_MAILBOX_KHR) hasMailbox = true;
-            if (m == SwapchainTuning.VK_PRESENT_MODE_IMMEDIATE_KHR) hasImmediate = true;
-            if (m == SwapchainTuning.VK_PRESENT_MODE_FIFO_RELAXED_KHR) hasRelaxed = true;
-        }
-
-        if (hasDesired) {
-            cir.setReturnValue(desiredMode);
-        } else if (desiredMode == SwapchainTuning.VK_PRESENT_MODE_MAILBOX_KHR && hasImmediate) {
-            cir.setReturnValue(SwapchainTuning.VK_PRESENT_MODE_IMMEDIATE_KHR);
-        } else if (desiredMode == SwapchainTuning.VK_PRESENT_MODE_MAILBOX_KHR && hasRelaxed) {
-            cir.setReturnValue(SwapchainTuning.VK_PRESENT_MODE_FIFO_RELAXED_KHR);
-        } else if (desiredMode == SwapchainTuning.VK_PRESENT_MODE_IMMEDIATE_KHR && hasMailbox) {
-            cir.setReturnValue(SwapchainTuning.VK_PRESENT_MODE_MAILBOX_KHR);
+        int preferredMode;
+        if (this.isVsync()) {
+            if (userConfigured) {
+                preferredMode = SwapchainTuning.parsePresentMode(modeStr);
+            } else {
+                preferredMode = SwapchainTuning.VK_PRESENT_MODE_FIFO_KHR;
+            }
         } else {
-            cir.setReturnValue(SwapchainTuning.VK_PRESENT_MODE_FIFO_KHR);
+            if (!userConfigured) {
+                return;
+            }
+            preferredMode = SwapchainTuning.parsePresentMode(modeStr);
         }
+
+        int optimalMode = SwapchainTuning.selectOptimalPresentMode(preferredMode, availablePresentModes);
+
+        // If Minecraft's VSync is active, preserve FIFO / FIFO_RELAXED instead of forcing an uncapped tear mode
+        // unless the user explicitly configured presentMode.
+        if (this.isVsync() && optimalMode == SwapchainTuning.VK_PRESENT_MODE_IMMEDIATE_KHR) {
+            if (!userConfigured || !"IMMEDIATE".equalsIgnoreCase(modeStr.trim())) {
+                optimalMode = SwapchainTuning.VK_PRESENT_MODE_FIFO_KHR;
+            }
+        }
+
+        cir.setReturnValue(optimalMode);
     }
 }

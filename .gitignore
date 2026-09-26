@@ -38,3 +38,6 @@ logs/
 .DS_Store
 Thumbs.db
 ehthumbs.db
+
+# Benchmarking & External Port Experiments
+fpstest-port/

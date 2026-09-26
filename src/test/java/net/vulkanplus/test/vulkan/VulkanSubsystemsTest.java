@@ -80,6 +80,47 @@ public class VulkanSubsystemsTest {
         List<Integer> fifoOnly = List.of(SwapchainTuning.VK_PRESENT_MODE_FIFO_KHR);
         int fallback = SwapchainTuning.selectOptimalPresentMode(SwapchainTuning.VK_PRESENT_MODE_MAILBOX_KHR, fifoOnly);
         assertEquals(SwapchainTuning.VK_PRESENT_MODE_FIFO_KHR, fallback);
+
+        // Mailbox unsupported -> falls back to FIFO_RELAXED or FIFO, never directly to IMMEDIATE
+        List<Integer> fifoAndImmediate = List.of(
+                SwapchainTuning.VK_PRESENT_MODE_IMMEDIATE_KHR,
+                SwapchainTuning.VK_PRESENT_MODE_FIFO_KHR
+        );
+        int fallbackNoTear = SwapchainTuning.selectOptimalPresentMode(SwapchainTuning.VK_PRESENT_MODE_MAILBOX_KHR, fifoAndImmediate);
+        assertEquals(SwapchainTuning.VK_PRESENT_MODE_FIFO_KHR, fallbackNoTear, "Must fall back to FIFO rather than IMMEDIATE to prevent tearing");
+
+        List<Integer> relaxedAndImmediate = List.of(
+                SwapchainTuning.VK_PRESENT_MODE_IMMEDIATE_KHR,
+                SwapchainTuning.VK_PRESENT_MODE_FIFO_RELAXED_KHR
+        );
+        int fallbackRelaxed = SwapchainTuning.selectOptimalPresentMode(SwapchainTuning.VK_PRESENT_MODE_MAILBOX_KHR, relaxedAndImmediate);
+        assertEquals(SwapchainTuning.VK_PRESENT_MODE_FIFO_RELAXED_KHR, fallbackRelaxed, "Must fall back to FIFO_RELAXED before IMMEDIATE");
+
+        // Optimal image count prevents AMD Mailbox starvation
+        assertEquals(3, SwapchainTuning.getOptimalImageCount(SwapchainTuning.VK_PRESENT_MODE_MAILBOX_KHR, 1, 0));
+        assertEquals(3, SwapchainTuning.getOptimalImageCount(SwapchainTuning.VK_PRESENT_MODE_MAILBOX_KHR, 2, 0));
+        assertEquals(4, SwapchainTuning.getOptimalImageCount(SwapchainTuning.VK_PRESENT_MODE_MAILBOX_KHR, 3, 0));
+        assertEquals(2, SwapchainTuning.getOptimalImageCount(SwapchainTuning.VK_PRESENT_MODE_MAILBOX_KHR, 2, 2)); // clamped
+        assertEquals(2, SwapchainTuning.getOptimalImageCount(SwapchainTuning.VK_PRESENT_MODE_IMMEDIATE_KHR, 1, 0));
+    }
+
+    @Test
+    @DisplayName("Verify LWJGL Vulkan, VMA, and Shaderc classes are present on the classpath")
+    public void testLwjglVulkanAndVmaClasspathAvailability() throws Exception {
+        assertNotNull(Class.forName("org.lwjgl.vulkan.VK10"));
+        assertNotNull(Class.forName("org.lwjgl.util.vma.VmaVulkanFunctions"));
+        assertNotNull(Class.forName("org.lwjgl.util.shaderc.Shaderc"));
+    }
+
+    @Test
+    @DisplayName("VulkanStateCache resets dynamic scissor state properly")
+    public void testScissorReset() {
+        VulkanStateCache cache = new VulkanStateCache();
+        assertTrue(cache.checkScissor(0, 0, 100, 100));
+        assertFalse(cache.checkScissor(0, 0, 100, 100), "Duplicate scissor should be filtered");
+
+        cache.resetScissor();
+        assertTrue(cache.checkScissor(0, 0, 100, 100), "Scissor after resetScissor should be accepted");
     }
 
     @Test

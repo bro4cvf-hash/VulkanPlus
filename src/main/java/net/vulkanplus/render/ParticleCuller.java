@@ -38,7 +38,7 @@ public class ParticleCuller {
      */
     public boolean shouldRenderParticle(double x, double y, double z, float particleRadius) {
         VulkanPlusConfig config = ConfigManager.getConfig();
-        if (!config.enableParticleCulling) return true;
+        if (config == null || !config.enabled || !config.enableParticleCulling) return true;
 
         totalParticleCount++;
 
@@ -54,19 +54,26 @@ public class ParticleCuller {
             return false;
         }
 
-        if (frustumCuller != null && !frustumCuller.isSphereVisible(x, y, z, particleRadius)) {
+        float effectiveRadius = Math.max(particleRadius, 1.0f);
+        if (frustumCuller != null && !frustumCuller.isSphereVisible(x, y, z, effectiveRadius)) {
             culledParticleCount++;
             return false;
         }
 
         if (!net.vulkanplus.culling.VulkanSectionVisibility.isPositionVisible(
-                (int) Math.floor(x), (int) Math.floor(y), (int) Math.floor(z),
+                net.vulkanplus.math.FastMath.fastFloor(x),
+                net.vulkanplus.math.FastMath.fastFloor(y),
+                net.vulkanplus.math.FastMath.fastFloor(z),
                 cameraX, cameraY, cameraZ)) {
             culledParticleCount++;
             return false;
         }
 
         return true;
+    }
+
+    public boolean shouldRenderParticle(double x, double y, double z) {
+        return shouldRenderParticle(x, y, z, 1.0f);
     }
 
     /**
@@ -77,7 +84,7 @@ public class ParticleCuller {
      */
     public boolean shouldRenderInFrustumParticle(double x, double y, double z) {
         VulkanPlusConfig config = ConfigManager.getConfig();
-        if (!config.enableParticleCulling) return true;
+        if (config == null || !config.enabled || !config.enableParticleCulling) return true;
 
         totalParticleCount++;
 
@@ -96,7 +103,9 @@ public class ParticleCuller {
         }
 
         if (!net.vulkanplus.culling.VulkanSectionVisibility.isPositionVisible(
-                (int) Math.floor(x), (int) Math.floor(y), (int) Math.floor(z),
+                net.vulkanplus.math.FastMath.fastFloor(x),
+                net.vulkanplus.math.FastMath.fastFloor(y),
+                net.vulkanplus.math.FastMath.fastFloor(z),
                 cameraX, cameraY, cameraZ)) {
             culledParticleCount++;
             return false;
@@ -112,13 +121,14 @@ public class ParticleCuller {
      */
     public int filterParticleBatch(double[] xs, double[] ys, double[] zs, float radius, boolean[] outVisible, int count) {
         VulkanPlusConfig config = ConfigManager.getConfig();
-        if (!config.enableParticleCulling) {
+        if (config == null || !config.enabled || !config.enableParticleCulling) {
             Arrays.fill(outVisible, 0, count, true);
             return count;
         }
 
         int visibleCount = 0;
         double maxDistSq = this.cachedMaxDistSq > 0 ? this.cachedMaxDistSq : (config.particleCullingDistance * config.particleCullingDistance);
+        float effectiveRadius = Math.max(radius, 1.0f);
 
         for (int i = 0; i < count; i++) {
             totalParticleCount++;
@@ -133,14 +143,16 @@ public class ParticleCuller {
                 continue;
             }
 
-            if (frustumCuller != null && !frustumCuller.isSphereVisible(xs[i], ys[i], zs[i], radius)) {
+            if (frustumCuller != null && !frustumCuller.isSphereVisible(xs[i], ys[i], zs[i], effectiveRadius)) {
                 culledParticleCount++;
                 outVisible[i] = false;
                 continue;
             }
 
             if (!net.vulkanplus.culling.VulkanSectionVisibility.isPositionVisible(
-                    (int) Math.floor(xs[i]), (int) Math.floor(ys[i]), (int) Math.floor(zs[i]),
+                    net.vulkanplus.math.FastMath.fastFloor(xs[i]),
+                    net.vulkanplus.math.FastMath.fastFloor(ys[i]),
+                    net.vulkanplus.math.FastMath.fastFloor(zs[i]),
                     cameraX, cameraY, cameraZ)) {
                 culledParticleCount++;
                 outVisible[i] = false;

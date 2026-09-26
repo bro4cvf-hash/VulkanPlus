@@ -32,6 +32,12 @@ repositories {
     }
 }
 
+configurations.configureEach {
+    resolutionStrategy {
+        force "net.fabricmc:sponge-mixin:0.17.3+mixin.0.8.7"
+    }
+}
+
 dependencies {
     // Minecraft and Mappings
     minecraft "com.mojang:minecraft:${project.minecraft_version}"
@@ -47,13 +53,27 @@ dependencies {
     modCompileOnly "com.terraformersmc:modmenu:${project.modmenu_version}"
     modLocalRuntime "com.terraformersmc:modmenu:${project.modmenu_version}"
 
-    // VulkanMod (Companion dependency - compileOnly ensures standalone safety)
+    // VulkanMod (Companion dependency and runtime)
     modCompileOnly "maven.modrinth:vulkanmod:${project.vulkanmod_version}"
+    modLocalRuntime "maven.modrinth:vulkanmod:${project.vulkanmod_version}"
     testCompileOnly "maven.modrinth:vulkanmod:${project.vulkanmod_version}"
     testRuntimeOnly "maven.modrinth:vulkanmod:${project.vulkanmod_version}"
 
-    // LWJGL 3 Vulkan Bindings (bundled via Jar-in-Jar)
+    // LWJGL 3 Vulkan, VMA & Shaderc Bindings (required by VulkanMod runtime in dev environment)
     implementation "org.lwjgl:lwjgl-vulkan:${project.lwjgl_version}"
+    implementation "org.lwjgl:lwjgl-vma:${project.lwjgl_version}"
+    implementation "org.lwjgl:lwjgl-shaderc:${project.lwjgl_version}"
+
+    runtimeOnly "org.lwjgl:lwjgl-vma:${project.lwjgl_version}:natives-windows"
+    runtimeOnly "org.lwjgl:lwjgl-vma:${project.lwjgl_version}:natives-linux"
+    runtimeOnly "org.lwjgl:lwjgl-vma:${project.lwjgl_version}:natives-macos"
+    runtimeOnly "org.lwjgl:lwjgl-vma:${project.lwjgl_version}:natives-macos-arm64"
+
+    runtimeOnly "org.lwjgl:lwjgl-shaderc:${project.lwjgl_version}:natives-windows"
+    runtimeOnly "org.lwjgl:lwjgl-shaderc:${project.lwjgl_version}:natives-linux"
+    runtimeOnly "org.lwjgl:lwjgl-shaderc:${project.lwjgl_version}:natives-macos"
+    runtimeOnly "org.lwjgl:lwjgl-shaderc:${project.lwjgl_version}:natives-macos-arm64"
+
     include "org.lwjgl:lwjgl-vulkan:${project.lwjgl_version}"
 
     // Unit Testing
@@ -98,7 +118,7 @@ jar {
 
 remapJar {
     archiveBaseName.set("vulkan-plus")
-    archiveVersion.set("1.0.0")
+    archiveVersion.set(project.mod_version)
     archiveClassifier.set("")
 }
 

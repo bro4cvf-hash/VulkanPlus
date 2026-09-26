@@ -34,7 +34,7 @@ public final class ItemFrameCuller {
     public static boolean shouldCullFrame(ItemFrameEntity frame, double camX, double camY, double camZ) {
         if (frame == null) return false;
         VulkanPlusConfig config = ConfigManager.getConfig();
-        if (!config.enabled || !config.enableFastItemFrames) {
+        if (config == null || !config.enabled || !config.enableFastItemFrames) {
             return false;
         }
 
@@ -53,7 +53,10 @@ public final class ItemFrameCuller {
             return true;
         }
 
-        Direction facing = frame.getHorizontalFacing();
+        Direction facing = frame.getFacing();
+        if (facing == null) {
+            facing = frame.getHorizontalFacing();
+        }
         if (facing == null) {
             return false;
         }
@@ -69,11 +72,11 @@ public final class ItemFrameCuller {
 
         if (config.enableItemFrameBlockOcclusion) {
             World world = frame.getEntityWorld();
-            if (world != null) {
-                BlockPos framePos = frame.getBlockPos();
+            BlockPos framePos = frame.getBlockPos();
+            if (world != null && framePos != null) {
                 BlockState stateAtFrame = world.getBlockState(framePos);
 
-                if (stateAtFrame.isOpaqueFullCube()) {
+                if (stateAtFrame != null && stateAtFrame.isOpaqueFullCube()) {
                     culledOccludedFrames++;
                     return true;
                 }
@@ -84,7 +87,7 @@ public final class ItemFrameCuller {
                         framePos.getZ() + nz
                 );
                 BlockState stateInFront = world.getBlockState(frontPos);
-                if (stateInFront.isOpaqueFullCube()) {
+                if (stateInFront != null && stateInFront.isOpaqueFullCube()) {
                     culledOccludedFrames++;
                     return true;
                 }
@@ -111,7 +114,7 @@ public final class ItemFrameCuller {
     public static boolean shouldCullContainedItem(ItemFrameEntity frame, double camX, double camY, double camZ) {
         if (frame == null) return false;
         VulkanPlusConfig config = ConfigManager.getConfig();
-        if (!config.enabled || !config.enableFastItemFrames) {
+        if (config == null || !config.enabled || !config.enableFastItemFrames) {
             return false;
         }
 

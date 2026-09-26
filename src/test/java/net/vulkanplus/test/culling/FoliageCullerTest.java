@@ -94,6 +94,17 @@ public class FoliageCullerTest {
             assertTrue(FoliageCuller.shouldEmitCrossQuad("VineBlock", wall * 2 + 1, true, true),
                     "VineBlock wall " + wall + " outward-facing front quad must be emitted in Shit Foliage");
         }
+
+        // Verify Block and BlockState overloads properly reduce cross quads in Fast Foliage
+        assertTrue(FoliageCuller.shouldEmitCrossQuad((net.minecraft.block.Block) null, 0, true, false));
+        assertTrue(FoliageCuller.shouldEmitCrossQuad((net.minecraft.block.Block) null, 1, true, false));
+        assertFalse(FoliageCuller.shouldEmitCrossQuad((net.minecraft.block.Block) null, 2, true, false));
+        assertFalse(FoliageCuller.shouldEmitCrossQuad((net.minecraft.block.Block) null, 3, true, false));
+
+        assertTrue(FoliageCuller.shouldEmitCrossQuad((net.minecraft.block.BlockState) null, 0, true, false));
+        assertTrue(FoliageCuller.shouldEmitCrossQuad((net.minecraft.block.BlockState) null, 1, true, false));
+        assertFalse(FoliageCuller.shouldEmitCrossQuad((net.minecraft.block.BlockState) null, 2, true, false));
+        assertFalse(FoliageCuller.shouldEmitCrossQuad((net.minecraft.block.BlockState) null, 3, true, false));
     }
 
     @Test
@@ -373,6 +384,47 @@ public class FoliageCullerTest {
                 "(Lnet/minecraft/world/BlockRenderView;Ljava/util/List;Lnet/minecraft/block/BlockState;Lnet/minecraft/util/math/BlockPos;Lnet/minecraft/client/util/math/MatrixStack;Lnet/minecraft/client/render/VertexConsumer;ZI)V");
         assertBytecodeMethodDescriptor("net.minecraft.client.render.block.BlockModelRenderer", "renderQuad",
                 "(Lnet/minecraft/world/BlockRenderView;Lnet/minecraft/block/BlockState;Lnet/minecraft/util/math/BlockPos;Lnet/minecraft/client/render/VertexConsumer;Lnet/minecraft/client/util/math/MatrixStack$Entry;Lnet/minecraft/client/render/model/BakedQuad;Lnet/minecraft/client/render/block/BlockModelRenderer$LightmapCache;I)V");
+    }
+
+    @Test
+    @DisplayName("Verify foliage blocks are NEVER invisible or culled at block-level when shitFoliage is disabled")
+    void testFoliageNeverInvisibleWhenShitFoliageDisabled() {
+        VulkanPlusConfig config = ConfigManager.getConfig();
+        config.enabled = true;
+        config.shitFoliage = false;
+        config.foliageDensity = 50; // Even with reduced density setting, blocks must not be culled when shitFoliage is OFF
+
+        net.minecraft.util.math.BlockPos pos = new net.minecraft.util.math.BlockPos(15, 64, -23);
+        // Fake/null state should return true safely
+        assertTrue(FoliageCuller.shouldRenderBlockAt(null, pos));
+
+        // When enableFastFoliage is true, cross foliage is rendered as 2D plane (quads 0 & 1 emitted, 2 & 3 culled)
+        assertTrue(FoliageCuller.shouldEmitCrossQuad((net.minecraft.block.BlockState) null, 0, true, false));
+        assertTrue(FoliageCuller.shouldEmitCrossQuad((net.minecraft.block.BlockState) null, 1, true, false));
+        assertFalse(FoliageCuller.shouldEmitCrossQuad((net.minecraft.block.BlockState) null, 2, true, false));
+        assertFalse(FoliageCuller.shouldEmitCrossQuad((net.minecraft.block.BlockState) null, 3, true, false));
+
+        // When neither Fast Foliage nor shitFoliage is enabled, vanilla keeps all cross planes visible
+        assertTrue(FoliageCuller.shouldEmitCrossQuad((net.minecraft.block.BlockState) null, 2, false, false));
+        assertTrue(FoliageCuller.shouldEmitCrossQuad((net.minecraft.block.BlockState) null, 3, false, false));
+    }
+
+    @Test
+    @DisplayName("Verify vines and horizontal carpet faces are never culled against solid opaque blocks")
+    void testVineAndHorizontalCarpetFacesNeverCulledAgainstOpaqueBlocks() {
+        // Vine against solid wall must NOT be culled (otherwise vines on walls disappear)
+        assertFalse(FoliageCuller.shouldCullPlantFace("VineBlock", "StoneBlock", Direction.NORTH, true));
+        assertFalse(FoliageCuller.shouldCullPlantFace("VineBlock", "StoneBlock", Direction.SOUTH, true));
+        assertFalse(FoliageCuller.shouldCullPlantFace("VineBlock", "StoneBlock", Direction.EAST, true));
+        assertFalse(FoliageCuller.shouldCullPlantFace("VineBlock", "StoneBlock", Direction.WEST, true));
+
+        // Pale moss carpet, leaf litter, and pink petals horizontal side faces against adjacent blocks must NOT be culled
+        for (String carpet : new String[]{"PaleMossCarpetBlock", "LeafLitterBlock", "FlowerbedBlock"}) {
+            assertFalse(FoliageCuller.shouldCullPlantFace(carpet, "StoneBlock", Direction.NORTH, true));
+            assertFalse(FoliageCuller.shouldCullPlantFace(carpet, "StoneBlock", Direction.SOUTH, true));
+            assertFalse(FoliageCuller.shouldCullPlantFace(carpet, "StoneBlock", Direction.EAST, true));
+            assertFalse(FoliageCuller.shouldCullPlantFace(carpet, "StoneBlock", Direction.WEST, true));
+        }
     }
 
     private void assertBytecodeMethodDescriptor(String className, String methodName, String... expectedDescs) throws Exception {

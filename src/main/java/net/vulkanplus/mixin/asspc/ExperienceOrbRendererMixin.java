@@ -18,6 +18,9 @@ public class ExperienceOrbRendererMixin {
             at = @At("RETURN")
     )
     private void onUpdateRenderState(ExperienceOrbEntity entity, ExperienceOrbEntityRenderState state, float tickDelta, CallbackInfo ci) {
+        if (state == null) {
+            return;
+        }
         VulkanPlusConfig cfg = ConfigManager.getConfig();
         if (cfg != null && cfg.enabled && cfg.staticExpAnimations) {
             state.age = 0.0f;

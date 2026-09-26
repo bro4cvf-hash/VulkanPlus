@@ -18,6 +18,9 @@ public class BipedEntityModelMixin<T extends BipedEntityRenderState> {
             cancellable = true
     )
     private void onSetBipedAngles(T state, CallbackInfo ci) {
+        if (state == null) {
+            return;
+        }
         VulkanPlusConfig cfg = ConfigManager.getConfig();
         if (cfg != null && cfg.enabled && cfg.noMobAnimations) {
             ((BipedEntityModel<?>) (Object) this).resetTransforms();

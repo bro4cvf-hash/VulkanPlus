@@ -142,8 +142,21 @@ public class VulkanPlusE2ETest {
 
         vulkanBridge.onRenderInit();
         vulkanBridge.onRenderFrameBegin();
+        assertTrue(vulkanBridge.getVramUsed() >= 0);
+        assertTrue(vulkanBridge.getVramAllocated() > 0);
         vulkanBridge.onRenderFrameEnd();
         vulkanBridge.onShutdown();
+
+        try {
+            java.lang.reflect.Method findLoadedClass = ClassLoader.class.getDeclaredMethod("findLoadedClass", String.class);
+            findLoadedClass.setAccessible(true);
+            Object loadedMm = findLoadedClass.invoke(
+                    VulkanModBridgeImpl.class.getClassLoader(),
+                    "net.vulkanmod.vulkan.memory.MemoryManager");
+            assertNull(loadedMm,
+                    "MemoryManager must NOT be loaded/initialized while Vulkan.getAllocator() == 0L, or MemoryManager.ALLOCATOR will be permanently frozen to 0L!");
+        } catch (ReflectiveOperationException | RuntimeException ignored) {
+        }
     }
 
     @Test

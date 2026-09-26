@@ -14,7 +14,6 @@ import java.util.Set;
  */
 public class VulkanModMixinPlugin implements IMixinConfigPlugin {
     private static final Set<String> VULKANMOD_MIXINS = Set.of(
-            "net.vulkanplus.mixin.vulkan.OptionsMixin",
             "net.vulkanplus.mixin.vulkan.VkRenderPassMixin",
             "net.vulkanplus.mixin.vulkan.TaskDispatcherMixin",
             "net.vulkanplus.mixin.vulkan.AreaBufferMixin",
@@ -27,15 +26,19 @@ public class VulkanModMixinPlugin implements IMixinConfigPlugin {
             "net.vulkanplus.mixin.culling.VulkanBlockRendererMixin"
     );
 
-    private boolean isVulkanModPresent;
+    private boolean isVulkanModPresent = isModLoaded("vulkanmod");
+
+    private static boolean isModLoaded(String modId) {
+        try {
+            return FabricLoader.getInstance().isModLoaded(modId);
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
 
     @Override
     public void onLoad(String mixinPackage) {
-        try {
-            this.isVulkanModPresent = FabricLoader.getInstance().isModLoaded("vulkanmod");
-        } catch (Throwable t) {
-            this.isVulkanModPresent = false;
-        }
+        this.isVulkanModPresent = isModLoaded("vulkanmod");
     }
 
     @Override
@@ -45,10 +48,23 @@ public class VulkanModMixinPlugin implements IMixinConfigPlugin {
 
     @Override
     public boolean shouldApplyMixin(String targetClassName, String mixinClassName) {
+        if (targetClassName == null || mixinClassName == null) {
+            return false;
+        }
+        if (mixinClassName.contains(".modmenu.") || targetClassName.startsWith("com.terraformersmc.modmenu.")) {
+            return isModLoaded("modmenu");
+        }
+        if (mixinClassName.endsWith("BiomeMixin")
+                && (isModLoaded("ferritecore") || isModLoaded("memoryleakfix"))) {
+            return false;
+        }
+        if (mixinClassName.contains(".c2me.") && isModLoaded("c2me")) {
+            return false;
+        }
         if (VULKANMOD_MIXINS.contains(mixinClassName)
                 || mixinClassName.contains(".mixin.vulkan.")
                 || targetClassName.startsWith("net.vulkanmod.")) {
-            return isVulkanModPresent;
+            return isVulkanModPresent || isModLoaded("vulkanmod");
         }
         return true;
     }
@@ -59,6 +75,9 @@ public class VulkanModMixinPlugin implements IMixinConfigPlugin {
 
     @Override
     public List<String> getMixins() {
+        if (isModLoaded("modmenu")) {
+            return List.of("modmenu.FabricIconHandlerMixin");
+        }
         return null;
     }
 

@@ -20,9 +20,20 @@ public class ChestBlockEntityRendererMixin {
             at = @At("RETURN")
     )
     private void onUpdateRenderState(BlockEntity entity, ChestBlockEntityRenderState state, float tickDelta, Vec3d pos, ModelCommandRenderer.CrumblingOverlayCommand crumblingOverlayCommand, CallbackInfo ci) {
+        if (state == null) return;
         VulkanPlusConfig cfg = ConfigManager.getConfig();
-        if (cfg != null && cfg.enabled && (cfg.noBlockEntityAnimations || cfg.fastChest)) {
-            state.lidAnimationProgress = 0.0f;
+        if (cfg != null && cfg.enabled) {
+            if (cfg.noBlockEntityAnimations || cfg.fastChest) {
+                state.lidAnimationProgress = 0.0f;
+                return;
+            }
+            if (pos != null && pos.lengthSquared() > 24.0 * 24.0) {
+                state.lidAnimationProgress = state.lidAnimationProgress > 0.5f ? 1.0f : 0.0f;
+                return;
+            }
+            if (state.lidAnimationProgress < 0.001f) {
+                state.lidAnimationProgress = 0.0f;
+            }
         }
     }
 }

@@ -27,10 +27,13 @@ public final class BlockEntityOcclusionCuller {
         try {
             return type == BlockEntityType.BEACON
                     || type == BlockEntityType.END_GATEWAY
-                    || type == BlockEntityType.END_PORTAL;
+                    || type == BlockEntityType.END_PORTAL
+                    || type == BlockEntityType.PISTON
+                    || type == BlockEntityType.BELL;
         } catch (Throwable ignored) {
-            String s = String.valueOf(type);
-            return s.contains("beacon") || s.contains("end_gateway") || s.contains("end_portal");
+            String s = String.valueOf(type).toLowerCase();
+            return s.contains("beacon") || s.contains("end_gateway") || s.contains("end_portal")
+                    || s.contains("piston") || s.contains("bell");
         }
     }
 
@@ -40,7 +43,8 @@ public final class BlockEntityOcclusionCuller {
     public static boolean isProtectedTypeName(String typeName) {
         if (typeName == null) return false;
         String lower = typeName.toLowerCase();
-        return lower.contains("beacon") || lower.contains("end_gateway") || lower.contains("end_portal");
+        return lower.contains("beacon") || lower.contains("end_gateway") || lower.contains("end_portal")
+                || lower.contains("piston") || lower.contains("bell");
     }
 
     /**
@@ -50,7 +54,7 @@ public final class BlockEntityOcclusionCuller {
     public static boolean shouldCull(BlockEntity blockEntity, double camX, double camY, double camZ) {
         if (blockEntity == null) return false;
         VulkanPlusConfig config = ConfigManager.getConfig();
-        if (!config.enabled || !config.enableBlockEntityOcclusion) {
+        if (config == null || !config.enabled || !config.enableBlockEntityOcclusion) {
             return false;
         }
 
@@ -65,10 +69,12 @@ public final class BlockEntityOcclusionCuller {
      * Fast path when config and type protection have already been verified by the caller.
      */
     public static boolean shouldCullUnchecked(BlockEntity blockEntity, double camX, double camY, double camZ) {
+        if (blockEntity == null) return false;
         World world = blockEntity.getWorld();
         if (world == null) return false;
 
         BlockPos pos = blockEntity.getPos();
+        if (pos == null) return false;
         if (isOccluded(world, pos, camX, camY, camZ)) {
             culledOccludedBlockEntities++;
             return true;
@@ -76,11 +82,27 @@ public final class BlockEntityOcclusionCuller {
         return false;
     }
 
+    private static boolean isNeighborOpaque(World world, BlockPos.Mutable mPos) {
+        if (world.getHeight() > 0) {
+            if (mPos.getY() < world.getBottomY()) {
+                return false;
+            }
+            if (!world.isChunkLoaded(mPos)) {
+                return false;
+            }
+        } else {
+            world.isChunkLoaded(mPos);
+        }
+        BlockState neighbor = world.getBlockState(mPos);
+        return neighbor != null && neighbor.isOpaqueFullCube();
+    }
+
     /**
      * Evaluates whether a block at pos is occluded from the camera point.
      * Tests all camera-facing faces (at most 3) using a reusable ThreadLocal<BlockPos.Mutable>.
      */
     public static boolean isOccluded(World world, BlockPos pos, double camX, double camY, double camZ) {
+        if (world == null || pos == null) return false;
         int ix = pos.getX();
         int iy = pos.getY();
         int iz = pos.getZ();
@@ -100,42 +122,36 @@ public final class BlockEntityOcclusionCuller {
 
         if (camX > bx + 1.0) {
             checkedFaces++;
-            BlockState neighbor = world.getBlockState(mPos.set(ix + 1, iy, iz));
-            if (!neighbor.isOpaqueFullCube()) {
+            if (!isNeighborOpaque(world, mPos.set(ix + 1, iy, iz))) {
                 allOccluded = false;
             }
         } else if (camX < bx) {
             checkedFaces++;
-            BlockState neighbor = world.getBlockState(mPos.set(ix - 1, iy, iz));
-            if (!neighbor.isOpaqueFullCube()) {
+            if (!isNeighborOpaque(world, mPos.set(ix - 1, iy, iz))) {
                 allOccluded = false;
             }
         }
 
         if (allOccluded && camY > by + 1.0) {
             checkedFaces++;
-            BlockState neighbor = world.getBlockState(mPos.set(ix, iy + 1, iz));
-            if (!neighbor.isOpaqueFullCube()) {
+            if (!isNeighborOpaque(world, mPos.set(ix, iy + 1, iz))) {
                 allOccluded = false;
             }
         } else if (allOccluded && camY < by) {
             checkedFaces++;
-            BlockState neighbor = world.getBlockState(mPos.set(ix, iy - 1, iz));
-            if (!neighbor.isOpaqueFullCube()) {
+            if (!isNeighborOpaque(world, mPos.set(ix, iy - 1, iz))) {
                 allOccluded = false;
             }
         }
 
         if (allOccluded && camZ > bz + 1.0) {
             checkedFaces++;
-            BlockState neighbor = world.getBlockState(mPos.set(ix, iy, iz + 1));
-            if (!neighbor.isOpaqueFullCube()) {
+            if (!isNeighborOpaque(world, mPos.set(ix, iy, iz + 1))) {
                 allOccluded = false;
             }
         } else if (allOccluded && camZ < bz) {
             checkedFaces++;
-            BlockState neighbor = world.getBlockState(mPos.set(ix, iy, iz - 1));
-            if (!neighbor.isOpaqueFullCube()) {
+            if (!isNeighborOpaque(world, mPos.set(ix, iy, iz - 1))) {
                 allOccluded = false;
             }
         }

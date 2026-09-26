@@ -11,6 +11,10 @@ public final class FastMath {
     public static final float HALF_PI = PI * 0.5f;
     public static final float INV_TWO_PI = 1.0f / TWO_PI;
 
+    // Cody-Waite split of 2*PI for pure-float high-accuracy range reduction
+    private static final float TWO_PI_HI = 6.283185f;
+    private static final float TWO_PI_LO = 3.019916e-7f;
+
     // Minimax polynomial coefficients for sin(x) on [-pi/2, pi/2]
     private static final float S1 = -1.6666657e-1f;
     private static final float S2 = 8.333017e-3f;
@@ -23,8 +27,9 @@ public final class FastMath {
      * Fast polynomial sine approximation. Accurate to within ~1e-5.
      */
     public static float sin(float rad) {
-        // Range reduction to [-PI, PI]
-        float x = rad - TWO_PI * (float) Math.floor((rad + PI) * (double) INV_TWO_PI);
+        // Pure float branchless range reduction to [-PI, PI]
+        int k = (int) (rad * INV_TWO_PI + (rad >= 0.0f ? 0.5f : -0.5f));
+        float x = Math.fma(-k, TWO_PI_HI, rad) - k * TWO_PI_LO;
 
         // Symmetry reduction to [-PI/2, PI/2]
         if (x > HALF_PI) {
@@ -37,11 +42,53 @@ public final class FastMath {
         return x * (1.0f + x2 * (S1 + x2 * (S2 + x2 * (S3 + x2 * S4))));
     }
 
+    public static final float DEG_TO_RAD = PI / 180.0f;
+    public static final float RAD_TO_DEG = 180.0f / PI;
+
     /**
      * Fast polynomial cosine approximation: cos(x) = sin(x + PI/2).
      */
     public static float cos(float rad) {
         return sin(rad + HALF_PI);
+    }
+
+    /**
+     * Fast polynomial sine for degree inputs (eliminates explicit Math.toRadians conversion).
+     */
+    public static float sinDeg(float degrees) {
+        return sin(degrees * DEG_TO_RAD);
+    }
+
+    /**
+     * Fast polynomial cosine for degree inputs (eliminates explicit Math.toRadians conversion).
+     */
+    public static float cosDeg(float degrees) {
+        return cos(degrees * DEG_TO_RAD);
+    }
+
+    /**
+     * Fast 2D Euclidean distance (hypot) avoiding slow Math.hypot double arithmetic.
+     */
+    public static float fastHypot(float x, float z) {
+        return fastSqrt(x * x + z * z);
+    }
+
+    public static double fastHypot(double x, double z) {
+        return Math.sqrt(x * x + z * z);
+    }
+
+    /**
+     * Fast 3D vector length (magnitude).
+     */
+    public static float fastLength3D(float x, float y, float z) {
+        return fastSqrt(x * x + y * y + z * z);
+    }
+
+    /**
+     * Fast 3D inverse magnitude for vector normalization without division.
+     */
+    public static float fastInvLength3D(float x, float y, float z) {
+        return fastInvSqrt(x * x + y * y + z * z);
     }
 
     /**

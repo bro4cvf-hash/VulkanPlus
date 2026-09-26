@@ -64,13 +64,17 @@ public class MoreCullingTest {
 
     @Test
     void testProtectedBlockEntityTypes() {
-        // Beacon, End Gateway, and End Portal must never be culled by occlusion
+        // Beacon, End Gateway, End Portal, Piston, and Bell must never be culled by occlusion
         assertTrue(BlockEntityOcclusionCuller.isProtectedTypeName("minecraft:beacon"));
         assertTrue(BlockEntityOcclusionCuller.isProtectedTypeName("minecraft:end_gateway"));
         assertTrue(BlockEntityOcclusionCuller.isProtectedTypeName("minecraft:end_portal"));
+        assertTrue(BlockEntityOcclusionCuller.isProtectedTypeName("minecraft:piston"));
+        assertTrue(BlockEntityOcclusionCuller.isProtectedTypeName("minecraft:bell"));
         assertTrue(BlockEntityOcclusionCuller.isProtectedTypeName("beacon"));
         assertTrue(BlockEntityOcclusionCuller.isProtectedTypeName("end_gateway"));
         assertTrue(BlockEntityOcclusionCuller.isProtectedTypeName("end_portal"));
+        assertTrue(BlockEntityOcclusionCuller.isProtectedTypeName("piston"));
+        assertTrue(BlockEntityOcclusionCuller.isProtectedTypeName("bell"));
 
         // Normal block entities must be eligible for occlusion culling
         assertFalse(BlockEntityOcclusionCuller.isProtectedTypeName("minecraft:chest"));

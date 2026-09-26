@@ -34,24 +34,28 @@ public abstract class GameRendererMixin {
     }
 
     @Inject(method = "renderWorld", at = @At("HEAD"))
-    private void onRenderWorldBegin(RenderTickCounter tickCounter, CallbackInfo ci) {
-        if (!net.vulkanplus.config.ConfigManager.getConfig().enabled) {
+    private void onRenderWorldHead(RenderTickCounter tickCounter, CallbackInfo ci) {
+        net.vulkanplus.config.VulkanPlusConfig cfg = net.vulkanplus.config.ConfigManager.getConfig();
+        if (cfg == null || !cfg.enabled) {
+            return;
+        }
+        if (this.camera == null || tickCounter == null) {
+            return;
+        }
+        Vec3d camPos = this.camera.getCameraPos();
+        Quaternionf camRot = this.camera.getRotation();
+        if (camPos == null || camRot == null) {
             return;
         }
         VulkanDetector.getBridge().onRenderFrameBegin();
         RenderOptimizer.resetFrameStats();
 
-        Vec3d camPos = camera.getCameraPos();
         net.vulkanplus.culling.FoliageCuller.updateCameraPosition(camPos.x, camPos.y, camPos.z);
-        float fov = getFov(camera, tickCounter.getTickProgress(true), true);
+        float fov = getFov(this.camera, tickCounter.getTickProgress(true), true);
         Matrix4f proj = getBasicProjectionMatrix(fov);
-        RenderOptimizer.updateCameraMatrices(proj, camera.getRotation(), camPos.x, camPos.y, camPos.z);
-    }
-
-    @Inject(method = "renderWorld", at = @At("RETURN"))
-    private void onRenderWorldEnd(RenderTickCounter tickCounter, CallbackInfo ci) {
-        if (net.vulkanplus.config.ConfigManager.getConfig().enabled) {
-            VulkanDetector.getBridge().onRenderFrameEnd();
+        if (proj == null) {
+            return;
         }
+        RenderOptimizer.updateCameraMatrices(proj, camRot, camPos.x, camPos.y, camPos.z);
     }
 }

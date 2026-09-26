@@ -53,37 +53,43 @@ public class RenderOptimizer {
     /**
      * Zero-allocation camera matrix and frustum update wiring MatrixPool, ReverseZProjection, and FastXoroshiro128PlusPlus.
      */
-    public static void updateCameraMatrices(Matrix4f proj, Quaternionf cameraRotation, double camX, double camY, double camZ) {
+    public static void updateCameraMatrices(Matrix4f projectionMatrix, Quaternionf cameraRotation, double camX, double camY, double camZ) {
+        if (projectionMatrix == null || cameraRotation == null) {
+            return;
+        }
         VulkanPlusConfig cfg = ConfigManager.getConfig();
-        if (cfg != null && cfg.enableMatrixPooling) {
-            MatrixPool pool = MatrixPool.get();
-            Quaternionf pooledRot = pool.allocQuaternionf();
-            Matrix4f pooledView = pool.allocMatrix4f();
-            try {
-                cameraRotation.conjugate(pooledRot);
-                pooledView.rotation(pooledRot);
-                CACHED_ROTATION.set(pooledRot);
-                CACHED_VIEW.set(pooledView);
-                CACHED_VIEW_PROJ.set(proj).mul(pooledView);
-                if (cfg.enableReverseZ) {
-                    ReverseZProjection.convertToReverseZ(proj, 0.05f, 4096.0f, CACHED_REVERSE_Z_PROJ);
-                    CACHED_REVERSE_Z_VIEW_PROJ.set(CACHED_REVERSE_Z_PROJ).mul(pooledView);
-                }
-            } finally {
-                pool.free(pooledView);
-                pool.free(pooledRot);
+        boolean active = cfg != null && cfg.enabled;
+
+        MatrixPool pool = MatrixPool.get();
+        Quaternionf scratchRot = pool.allocQuaternionf();
+        Matrix4f scratchView = pool.allocMatrix4f();
+        Matrix4f scratchViewProj = pool.allocMatrix4f();
+        Matrix4f scratchRevZProj = pool.allocMatrix4f();
+        Matrix4f scratchRevZViewProj = pool.allocMatrix4f();
+        try {
+            cameraRotation.conjugate(scratchRot);
+            scratchView.rotation(scratchRot);
+            scratchViewProj.set(projectionMatrix).mul(scratchView);
+
+            CACHED_ROTATION.set(scratchRot);
+            CACHED_VIEW.set(scratchView);
+            CACHED_VIEW_PROJ.set(scratchViewProj);
+
+            if (active && cfg.enableReverseZ) {
+                ReverseZProjection.convertToReverseZ(projectionMatrix, 0.05f, 4096.0f, scratchRevZProj);
+                scratchRevZViewProj.set(scratchRevZProj).mul(scratchView);
+                CACHED_REVERSE_Z_PROJ.set(scratchRevZProj);
+                CACHED_REVERSE_Z_VIEW_PROJ.set(scratchRevZViewProj);
             }
-        } else {
-            Quaternionf rot = cameraRotation.conjugate(CACHED_ROTATION);
-            Matrix4f view = CACHED_VIEW.rotation(rot);
-            CACHED_VIEW_PROJ.set(proj).mul(view);
-            if (cfg != null && cfg.enableReverseZ) {
-                ReverseZProjection.convertToReverseZ(proj, 0.05f, 4096.0f, CACHED_REVERSE_Z_PROJ);
-                CACHED_REVERSE_Z_VIEW_PROJ.set(CACHED_REVERSE_Z_PROJ).mul(view);
-            }
+        } finally {
+            pool.free(scratchRevZViewProj);
+            pool.free(scratchRevZProj);
+            pool.free(scratchViewProj);
+            pool.free(scratchView);
+            pool.free(scratchRot);
         }
 
-        if (cfg != null && cfg.enableFastRandom) {
+        if (active && cfg.enableFastRandom) {
             FastXoroshiro128PlusPlus.current().nextLong();
         }
 
@@ -91,13 +97,9 @@ public class RenderOptimizer {
     }
 
     /**
-     * Returns a sub-pixel PRNG jitter offset in [-5e-5, +5e-5] when enableFastRandom is active.
+     * Returns 0.0f. PRNG jitter was removed to prevent 144Hz particle strobing/flickering.
      */
     public static float nextParticleJitter() {
-        VulkanPlusConfig cfg = ConfigManager.getConfig();
-        if (cfg != null && cfg.enabled && cfg.enableFastRandom) {
-            return (FastXoroshiro128PlusPlus.current().nextFloat() - 0.5f) * 1.0e-4f;
-        }
         return 0.0f;
     }
 

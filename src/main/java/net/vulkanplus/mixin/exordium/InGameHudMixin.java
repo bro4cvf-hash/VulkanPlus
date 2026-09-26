@@ -14,7 +14,7 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-@Mixin(InGameHud.class)
+@Mixin(value = InGameHud.class, priority = 2000)
 public abstract class InGameHudMixin {
 
     @Unique
@@ -26,17 +26,39 @@ public abstract class InGameHudMixin {
     @Inject(method = "renderCrosshair", at = @At("HEAD"), cancellable = true)
     private void onRenderCrosshairHead(DrawContext context, RenderTickCounter tickCounter, CallbackInfo ci) {
         ExordiumManager manager = ExordiumManager.getInstance();
+        MinecraftClient client = MinecraftClient.getInstance();
         if (manager.isExordiumActive()
                 && manager.isCapturing()
                 && !this.vulkanplus$renderingUncachedCrosshair
-                && ConfigManager.getConfig().separateCrosshair) {
+                && this.vulkanplus$shouldRenderDecoupledCrosshair(client)) {
             // Skip baking the crosshair into the cached HUD state so it renders at full native FPS
             ci.cancel();
         }
     }
 
+    @Unique
+    private boolean vulkanplus$shouldRenderDecoupledCrosshair(MinecraftClient client) {
+        if (!ConfigManager.getConfig().separateCrosshair) {
+            return false;
+        }
+        if (client == null || client.options == null || client.options.hudHidden) {
+            return false;
+        }
+        if (client.currentScreen != null) {
+            return false;
+        }
+        if (client.inGameHud != null && client.inGameHud.getDebugHud() != null
+                && client.inGameHud.getDebugHud().shouldShowDebugHud()) {
+            return false;
+        }
+        return true;
+    }
+
     @Inject(method = "render", at = @At("HEAD"), cancellable = true)
     private void onRenderHead(DrawContext context, RenderTickCounter tickCounter, CallbackInfo ci) {
+        // Always record 3D world frame timing and reset per-frame overlay guard before Exordium HUD throttling
+        net.vulkanplus.VulkanPlusMod.beginHudFrame();
+
         ExordiumManager manager = ExordiumManager.getInstance();
         if (!manager.isExordiumActive()) {
             return;
@@ -51,11 +73,11 @@ public abstract class InGameHudMixin {
             return;
         }
 
+        GuiRenderState state = ((DrawContextAccessor) context).vulkanplus$getState();
         if (!manager.shouldRenderHud(tickCounter)) {
             if (manager.hasValidCachedFrame()) {
-                GuiRenderState state = ((DrawContextAccessor) context).vulkanplus$getState();
                 manager.replayCachedHud(state);
-                if (ConfigManager.getConfig().separateCrosshair) {
+                if (this.vulkanplus$shouldRenderDecoupledCrosshair(client)) {
                     this.vulkanplus$renderingUncachedCrosshair = true;
                     try {
                         this.renderCrosshair(context, tickCounter);
@@ -63,21 +85,23 @@ public abstract class InGameHudMixin {
                         this.vulkanplus$renderingUncachedCrosshair = false;
                     }
                 }
+                net.vulkanplus.VulkanPlusMod.renderDiagnosticsAndFpsOverlay(context);
                 ci.cancel();
             }
             return;
         }
 
-        manager.beginHudCapture();
+        manager.beginHudCapture(state);
     }
 
-    @Inject(method = "render", at = @At("RETURN"))
+    @Inject(method = "render", at = @At("TAIL"))
     private void onRenderReturn(DrawContext context, RenderTickCounter tickCounter, CallbackInfo ci) {
         ExordiumManager manager = ExordiumManager.getInstance();
         if (manager.isCapturing()) {
             GuiRenderState state = ((DrawContextAccessor) context).vulkanplus$getState();
             manager.endHudCapture(state);
-            if (ConfigManager.getConfig().separateCrosshair) {
+            MinecraftClient client = MinecraftClient.getInstance();
+            if (this.vulkanplus$shouldRenderDecoupledCrosshair(client)) {
                 this.vulkanplus$renderingUncachedCrosshair = true;
                 try {
                     this.renderCrosshair(context, tickCounter);
@@ -86,5 +110,6 @@ public abstract class InGameHudMixin {
                 }
             }
         }
+        net.vulkanplus.VulkanPlusMod.renderDiagnosticsAndFpsOverlay(context);
     }
 }

@@ -29,10 +29,6 @@
   "mixins": [
     "vulkanplus.mixins.json",
     {
-      "config": "vulkanplus-vulkanmod.mixins.json",
-      "environment": "client"
-    },
-    {
       "config": "vulkanplus-modmenu.mixins.json",
       "environment": "client"
     }

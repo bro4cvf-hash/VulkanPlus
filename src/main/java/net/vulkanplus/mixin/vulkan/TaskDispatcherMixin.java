@@ -48,7 +48,18 @@ public abstract class TaskDispatcherMixin {
             return;
         }
 
-        final long deadline = System.nanoTime() + UPLOAD_BUDGET_NANOS;
+        int backlog = this.compileResults.size();
+        final long budgetNanos;
+        if (backlog > 64) {
+            budgetNanos = 1_500_000L; // 1.5ms under heavy chunk backlog
+        } else if (backlog > 16) {
+            budgetNanos = 800_000L;   // 0.8ms under moderate chunk backlog
+        } else {
+            budgetNanos = UPLOAD_BUDGET_NANOS; // 0.4ms default smooth budget
+        }
+
+        final long startTime = System.nanoTime();
+        int uploadedCount = 0;
         boolean graphDirty = false;
 
         do {
@@ -58,6 +69,10 @@ public abstract class TaskDispatcherMixin {
                 this.doSectionUpdate(item);
             } else {
                 RenderSection section = item.renderSection;
+                if (section == null) {
+                    this.doSectionUpdate(item);
+                    continue;
+                }
                 long prevVis = section.getVisibility();
                 boolean prevEmpty = section.isCompletelyEmpty();
                 boolean prevBE = section.containsBlockEntities();
@@ -71,11 +86,10 @@ public abstract class TaskDispatcherMixin {
                 }
             }
 
-            if (System.nanoTime() >= deadline) {
+            if ((++uploadedCount & 3) == 0 && (System.nanoTime() - startTime >= budgetNanos)) {
                 break;
             }
-            item = this.compileResults.poll();
-        } while (item != null);
+        } while ((item = this.compileResults.poll()) != null);
 
         cir.setReturnValue(graphDirty);
     }

@@ -6,6 +6,7 @@ import net.vulkanplus.VulkanPlusMod;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.IOException;
+import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -50,7 +51,9 @@ public class ConfigManager {
 
     public static void setConfig(VulkanPlusConfig newConfig) {
         synchronized (LOCK) {
-            currentConfig = newConfig.copy();
+            if (newConfig != null) {
+                currentConfig.copyFrom(newConfig);
+            }
             save();
         }
     }
@@ -103,7 +106,11 @@ public class ConfigManager {
                     writer.flush();
                 }
 
-                Files.move(tempPath, configPath, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+                try {
+                    Files.move(tempPath, configPath, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+                } catch (AtomicMoveNotSupportedException ex) {
+                    Files.move(tempPath, configPath, StandardCopyOption.REPLACE_EXISTING);
+                }
             } catch (IOException e) {
                 VulkanPlusMod.LOGGER.error("[VulkanPlus] Failed to save configuration atomically.", e);
             }
@@ -114,7 +121,7 @@ public class ConfigManager {
      * Lightweight custom JSON serializer to avoid third-party dependencies.
      */
     public static String toJson(VulkanPlusConfig config) {
-        StringBuilder sb = new StringBuilder();
+        StringBuilder sb = new StringBuilder(2048);
         sb.append("{\n");
         sb.append("  \"enabled\": ").append(config.enabled).append(",\n");
         sb.append("  \"enableBufferPooling\": ").append(config.enableBufferPooling).append(",\n");
@@ -164,8 +171,23 @@ public class ConfigManager {
         sb.append("  \"noChunkFade\": ").append(config.noChunkFade).append(",\n");
         sb.append("  \"fastChest\": ").append(config.fastChest).append(",\n");
         sb.append("  \"shitFoliage\": ").append(config.shitFoliage).append(",\n");
+        sb.append("  \"fullBright\": ").append(config.fullBright).append(",\n");
         sb.append("  \"enableMemoryLeakFix\": ").append(config.enableMemoryLeakFix).append(",\n");
         sb.append("  \"enableC2MeOptimizations\": ").append(config.enableC2MeOptimizations).append(",\n");
+        sb.append("  \"enableExordium\": ").append(config.enableExordium).append(",\n");
+        sb.append("  \"hudTargetFps\": ").append(config.hudTargetFps).append(",\n");
+        sb.append("  \"enableScreenPacing\": ").append(config.enableScreenPacing).append(",\n");
+        sb.append("  \"screenTargetFps\": ").append(config.screenTargetFps).append(",\n");
+        sb.append("  \"instantInputResponsiveness\": ").append(config.instantInputResponsiveness).append(",\n");
+        sb.append("  \"dynamicHudUpdates\": ").append(config.dynamicHudUpdates).append(",\n");
+        sb.append("  \"separateCrosshair\": ").append(config.separateCrosshair).append(",\n");
+        sb.append("  \"bypassInDebugScreen\": ").append(config.bypassInDebugScreen).append(",\n");
+        sb.append("  \"fastFadeTransitions\": ").append(config.fastFadeTransitions).append(",\n");
+        sb.append("  \"enableAnimationLod\": ").append(config.enableAnimationLod).append(",\n");
+        sb.append("  \"animationLodDistance\": ").append(config.animationLodDistance).append(",\n");
+        sb.append("  \"enableEntityShadowCulling\": ").append(config.enableEntityShadowCulling).append(",\n");
+        sb.append("  \"entityShadowMaxDistance\": ").append(config.entityShadowMaxDistance).append(",\n");
+        sb.append("  \"vramBudgetMb\": ").append(config.vramBudgetMb).append(",\n");
         sb.append("  \"activePreset\": \"").append(config.activePreset.name()).append("\"\n");
         sb.append("}\n");
         return sb.toString();
@@ -264,8 +286,33 @@ public class ConfigManager {
         if (map.containsKey("noChunkFade")) target.noChunkFade = Boolean.parseBoolean(map.get("noChunkFade"));
         if (map.containsKey("fastChest")) target.fastChest = Boolean.parseBoolean(map.get("fastChest"));
         if (map.containsKey("shitFoliage")) target.shitFoliage = Boolean.parseBoolean(map.get("shitFoliage"));
+        if (map.containsKey("fullBright")) target.fullBright = Boolean.parseBoolean(map.get("fullBright"));
         if (map.containsKey("enableMemoryLeakFix")) target.enableMemoryLeakFix = Boolean.parseBoolean(map.get("enableMemoryLeakFix"));
         if (map.containsKey("enableC2MeOptimizations")) target.enableC2MeOptimizations = Boolean.parseBoolean(map.get("enableC2MeOptimizations"));
+        if (map.containsKey("enableExordium")) target.enableExordium = Boolean.parseBoolean(map.get("enableExordium"));
+        if (map.containsKey("hudTargetFps")) {
+            try { target.hudTargetFps = Integer.parseInt(map.get("hudTargetFps")); } catch (NumberFormatException ignored) {}
+        }
+        if (map.containsKey("enableScreenPacing")) target.enableScreenPacing = Boolean.parseBoolean(map.get("enableScreenPacing"));
+        if (map.containsKey("screenTargetFps")) {
+            try { target.screenTargetFps = Integer.parseInt(map.get("screenTargetFps")); } catch (NumberFormatException ignored) {}
+        }
+        if (map.containsKey("instantInputResponsiveness")) target.instantInputResponsiveness = Boolean.parseBoolean(map.get("instantInputResponsiveness"));
+        if (map.containsKey("dynamicHudUpdates")) target.dynamicHudUpdates = Boolean.parseBoolean(map.get("dynamicHudUpdates"));
+        if (map.containsKey("separateCrosshair")) target.separateCrosshair = Boolean.parseBoolean(map.get("separateCrosshair"));
+        if (map.containsKey("bypassInDebugScreen")) target.bypassInDebugScreen = Boolean.parseBoolean(map.get("bypassInDebugScreen"));
+        if (map.containsKey("fastFadeTransitions")) target.fastFadeTransitions = Boolean.parseBoolean(map.get("fastFadeTransitions"));
+        if (map.containsKey("enableAnimationLod")) target.enableAnimationLod = Boolean.parseBoolean(map.get("enableAnimationLod"));
+        if (map.containsKey("animationLodDistance")) {
+            try { target.animationLodDistance = Double.parseDouble(map.get("animationLodDistance")); } catch (NumberFormatException ignored) {}
+        }
+        if (map.containsKey("enableEntityShadowCulling")) target.enableEntityShadowCulling = Boolean.parseBoolean(map.get("enableEntityShadowCulling"));
+        if (map.containsKey("entityShadowMaxDistance")) {
+            try { target.entityShadowMaxDistance = Double.parseDouble(map.get("entityShadowMaxDistance")); } catch (NumberFormatException ignored) {}
+        }
+        if (map.containsKey("vramBudgetMb")) {
+            try { target.vramBudgetMb = Integer.parseInt(map.get("vramBudgetMb")); } catch (NumberFormatException ignored) {}
+        }
         if (map.containsKey("activePreset")) {
             try { target.activePreset = Preset.valueOf(map.get("activePreset")); } catch (Exception ignored) {}
         }

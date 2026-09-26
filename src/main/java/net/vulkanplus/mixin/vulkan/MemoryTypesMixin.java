@@ -6,6 +6,7 @@ import net.vulkanmod.vulkan.memory.MemoryTypes;
 import net.vulkanplus.VulkanPlusMod;
 import net.vulkanplus.config.ConfigManager;
 import net.vulkanplus.config.VulkanPlusConfig;
+import org.lwjgl.vulkan.VK10;
 import org.lwjgl.vulkan.VkMemoryHeap;
 import org.lwjgl.vulkan.VkMemoryType;
 import org.lwjgl.vulkan.VkPhysicalDeviceMemoryProperties;
@@ -28,7 +29,7 @@ import java.lang.reflect.Constructor;
  * <p>This mixin inspects {@link DeviceManager#memoryProperties} at {@code RETURN} of
  * {@code createMemoryTypes()} and upgrades {@link MemoryTypes#GPU_MEM} to
  * {@code MemoryTypes$DeviceMappableMemory} when a coherent device-mappable memory type
- * ({@code (propertyFlags & 7) == 7}) backed by a heap of at least 512 MB is available.
+ * ({@code (propertyFlags & 7) == 7}) backed by a heap of at least 2 GB and >= 50% of VRAM is available.
  */
 @Mixin(value = MemoryTypes.class, remap = false)
 public abstract class MemoryTypesMixin {
@@ -41,12 +42,20 @@ public abstract class MemoryTypesMixin {
     @Unique
     private static final int DEVICE_LOCAL_HOST_COHERENT_FLAGS = 7;
 
-    /** Minimum BAR heap size to safely use DeviceMappableMemory: 512 MB (536,870,912 bytes). */
+    /** Minimum ReBAR heap size: 2 GB (prevents BAR exhaustion on partial-BAR GPUs). */
     @Unique
-    private static final long MIN_REBAR_HEAP_BYTES = 536_870_912L;
+    private static final long MIN_REBAR_HEAP_BYTES = 2L * 1024L * 1024L * 1024L;
 
     @Inject(method = "createMemoryTypes", at = @At("RETURN"))
     private static void vulkanplus$enableReBarDeviceMappableMemory(CallbackInfo ci) {
+        try {
+            net.vulkanplus.bridge.RenderEngineBridge bridge = net.vulkanplus.bridge.VulkanDetector.getBridge();
+            if (bridge instanceof net.vulkanplus.bridge.impl.VulkanModBridgeImpl vkBridge) {
+                vkBridge.tryTuneSwapchain();
+            }
+        } catch (Throwable ignored) {
+        }
+
         VulkanPlusConfig cfg = ConfigManager.getConfig();
         if (cfg != null && (!cfg.enabled || !cfg.enableBufferPooling)) {
             return;
@@ -61,28 +70,54 @@ public abstract class MemoryTypesMixin {
             return;
         }
 
-        int typeCount = memProps.memoryTypeCount();
+        int typeCount = Math.min(memProps.memoryTypeCount(), VK10.VK_MAX_MEMORY_TYPES);
+        int heapCount = Math.min(memProps.memoryHeapCount(), VK10.VK_MAX_MEMORY_HEAPS);
+
+        long maxDeviceLocalHeapBytes = 0L;
+        for (int h = 0; h < heapCount; h++) {
+            VkMemoryHeap heap = memProps.memoryHeaps(h);
+            if ((heap.flags() & VK10.VK_MEMORY_HEAP_DEVICE_LOCAL_BIT) != 0) {
+                maxDeviceLocalHeapBytes = Math.max(maxDeviceLocalHeapBytes, heap.size());
+            }
+        }
+
+        int bestTypeIndex = -1;
+        int bestFlags = 0;
+        long bestHeapSize = 0L;
+        VkMemoryType bestMemoryType = null;
+        VkMemoryHeap bestHeap = null;
+
         for (int i = 0; i < typeCount; i++) {
             VkMemoryType memoryType = memProps.memoryTypes(i);
             int flags = memoryType.propertyFlags();
-            if ((flags & DEVICE_LOCAL_HOST_COHERENT_FLAGS) == DEVICE_LOCAL_HOST_COHERENT_FLAGS) {
-                VkMemoryHeap heap = memProps.memoryHeaps(memoryType.heapIndex());
+            int heapIndex = memoryType.heapIndex();
+            if (heapIndex >= 0 && heapIndex < heapCount
+                    && (flags & DEVICE_LOCAL_HOST_COHERENT_FLAGS) == DEVICE_LOCAL_HOST_COHERENT_FLAGS) {
+                VkMemoryHeap heap = memProps.memoryHeaps(heapIndex);
                 long heapSize = heap.size();
-                if (heapSize >= MIN_REBAR_HEAP_BYTES) {
-                    try {
-                        Class<?> clazz = Class.forName("net.vulkanmod.vulkan.memory.MemoryTypes$DeviceMappableMemory");
-                        Constructor<?> ctor = clazz.getDeclaredConstructor(VkMemoryType.class, VkMemoryHeap.class);
-                        ctor.setAccessible(true);
-                        MemoryTypes.GPU_MEM = (MemoryType) ctor.newInstance(memoryType, heap);
-                        VulkanPlusMod.LOGGER.info(
-                                "[VulkanPlus] Activated ReBAR/SAM DeviceMappableMemory (typeIndex={}, flags=0x{}, heapSize={} MB)",
-                                i, Integer.toHexString(flags), heapSize / (1024L * 1024L));
-                        return;
-                    } catch (Throwable t) {
-                        VulkanPlusMod.LOGGER.warn("[VulkanPlus] Failed to instantiate DeviceMappableMemory, keeping default GPU_MEM", t);
-                        return;
-                    }
+                if (heapSize >= MIN_REBAR_HEAP_BYTES
+                        && heapSize >= maxDeviceLocalHeapBytes * 0.50
+                        && heapSize > bestHeapSize) {
+                    bestTypeIndex = i;
+                    bestFlags = flags;
+                    bestHeapSize = heapSize;
+                    bestMemoryType = memoryType;
+                    bestHeap = heap;
                 }
+            }
+        }
+
+        if (bestMemoryType != null && bestHeap != null) {
+            try {
+                Class<?> clazz = Class.forName("net.vulkanmod.vulkan.memory.MemoryTypes$DeviceMappableMemory");
+                Constructor<?> ctor = clazz.getDeclaredConstructor(VkMemoryType.class, VkMemoryHeap.class);
+                ctor.setAccessible(true);
+                MemoryTypes.GPU_MEM = (MemoryType) ctor.newInstance(bestMemoryType, bestHeap);
+                VulkanPlusMod.LOGGER.info(
+                        "[VulkanPlus] Activated ReBAR/SAM DeviceMappableMemory (typeIndex={}, flags=0x{}, heapSize={} MB)",
+                        bestTypeIndex, Integer.toHexString(bestFlags), bestHeapSize / (1024L * 1024L));
+            } catch (Throwable t) {
+                VulkanPlusMod.LOGGER.warn("[VulkanPlus] Failed to instantiate DeviceMappableMemory, keeping default GPU_MEM", t);
             }
         }
     }

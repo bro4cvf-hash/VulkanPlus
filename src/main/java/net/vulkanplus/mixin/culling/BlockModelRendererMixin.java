@@ -1,6 +1,7 @@
 package net.vulkanplus.mixin.culling;
 
 import net.minecraft.block.BlockState;
+import net.minecraft.client.render.OverlayTexture;
 import net.minecraft.client.render.VertexConsumer;
 import net.minecraft.client.render.block.BlockModelRenderer;
 import net.minecraft.client.render.model.BakedQuad;
@@ -67,8 +68,14 @@ public abstract class BlockModelRendererMixin {
             quadState[2] = 1;
         }
 
-        if (config.shitFoliage && FoliageCuller.isFoliageOrPlant(state)) {
-            this.renderFlat(world, parts, state, pos, matrices, vertexConsumer, cull, overlay);
+        if (config.fullBright || ((config.enableFastFoliage || config.shitFoliage) && FoliageCuller.isFoliageOrPlant(state))) {
+            try {
+                this.renderFlat(world, parts, state, pos, matrices, vertexConsumer, cull, OverlayTexture.DEFAULT_UV);
+            } finally {
+                quadState[0] = 0;
+                quadState[1] = 0;
+                quadState[2] = 0;
+            }
             ci.cancel();
         }
     }
@@ -97,8 +104,14 @@ public abstract class BlockModelRendererMixin {
             }
         }
 
-        if (config.shitFoliage && FoliageCuller.isFoliageOrPlant(state)) {
-            this.renderFlat(world, parts, state, pos, matrices, vertexConsumer, cull, overlay);
+        if (config.fullBright || ((config.enableFastFoliage || config.shitFoliage) && FoliageCuller.isFoliageOrPlant(state))) {
+            try {
+                this.renderFlat(world, parts, state, pos, matrices, vertexConsumer, cull, OverlayTexture.DEFAULT_UV);
+            } finally {
+                quadState[0] = 0;
+                quadState[1] = 0;
+                quadState[2] = 0;
+            }
             ci.cancel();
         }
     }

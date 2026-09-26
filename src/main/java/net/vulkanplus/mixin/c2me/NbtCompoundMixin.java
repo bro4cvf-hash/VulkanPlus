@@ -30,9 +30,9 @@ public class NbtCompoundMixin {
             index = 0
     )
     private static Map<String, NbtElement> useFastUtilMap(Map<String, NbtElement> original) {
-        VulkanPlusConfig cfg = ConfigManager.getConfig();
+        final VulkanPlusConfig cfg = ConfigManager.getConfig();
         if (cfg != null && cfg.enabled && cfg.enableC2MeOptimizations) {
-            return new Object2ObjectOpenHashMap<>();
+            return new Object2ObjectOpenHashMap<>(8, 0.8f);
         }
         return original;
     }

@@ -127,6 +127,8 @@
   "vulkanplus.options.fastChest.tooltip": "Locks chests to solid static block models and completely disables dynamic BlockEntity lid rendering.",
   "vulkanplus.options.shitFoliage": "Shit Foliage",
   "vulkanplus.options.shitFoliage.tooltip": "Extreme potato foliage: 75% fewer vertices (single quad), flat lighting, 25% clutter density, and 24-block distance culling.",
+  "vulkanplus.options.fullBright": "Engine Fullbright",
+  "vulkanplus.options.fullBright.tooltip": "Bypasses the lighting & AO engine during chunk meshing, skips light-update chunk rebuilds, and locks 100% brightness.",
 
   "vulkanplus.options.enableC2MeOptimizations": "C2ME Chunk Engine",
   "vulkanplus.options.enableC2MeOptimizations.tooltip": "Enables asynchronous chunk region disk writes and fastutil NBT compound maps.",
